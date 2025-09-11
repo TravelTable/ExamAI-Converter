@@ -547,12 +547,38 @@ content:
       model,
       messages: prompt,
       temperature: 0.2,
-      max_tokens: 2048,
+      max_tokens: 4096,
       tools: [EXAM_FUNCTION],
       tool_choice: { type: "function", function: { name: "return_exam" } } // force structured output
     });
 
-    const exam = extractExamFromResponse(data);
+    // Defensive: handle truncated/partial JSON from OpenAI
+let exam;
+try {
+  exam = extractExamFromResponse(data);
+} catch (e) {
+  // Try to recover from partial/truncated JSON in tool_calls
+  const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+  if (toolCall && typeof toolCall === "string") {
+    // Try to find the largest valid JSON substring
+    let jsonStr = toolCall;
+    // Try to close the last array/object if truncated
+    if (jsonStr.lastIndexOf("]") < jsonStr.lastIndexOf("[")) jsonStr += "]";
+    if (jsonStr.lastIndexOf("}") < jsonStr.lastIndexOf("{")) jsonStr += "}";
+    try {
+      exam = robustLLMJsonParse(jsonStr);
+      exam = normalizeExamStructure(exam);
+    } catch (e2) {
+      setError("Exam data was truncated or incomplete. Please try again or reduce exam length.");
+      setIsProcessing(false);
+      return;
+    }
+  } else {
+    setError("Failed to parse exam data. Please try again.");
+    setIsProcessing(false);
+    return;
+  }
+}
     const tokensResponse = estimateTokens(JSON.stringify(exam));
 
     // AI suggested time
@@ -1508,43 +1534,46 @@ function ExamView({
                     <Eye className="h-6 w-6 mr-2 text-indigo-600" />
                     Detailed Review
                   </h3>
-                  <ExamSection
-                    title="Multiple Choice Questions"
-                    description="Select the best answer for each question."
-                    questions={examJSON.multipleChoice}
-                    answers={answers}
-                    showAnswers={true}
-                    showHints={showHints}
-                    onAnswerChange={onAnswerChange}
-                  />
-                  <ExamSection
-                    title="True/False Questions"
-                    description="Indicate whether each statement is true or false."
-                    questions={examJSON.trueFalse}
-                    answers={answers}
-                    showAnswers={true}
-                    showHints={showHints}
-                    onAnswerChange={onAnswerChange}
-                  />
-                  <ExamSection
-                    title="Checkbox Questions"
-                    description="Select ALL correct answers for each question."
-                    questions={examJSON.checkbox}
-                    answers={answers}
-                    showAnswers={true}
-                    showHints={showHints}
-                    onAnswerChange={onAnswerChange}
-                  />
-                  <ExamSection
-                    title="Short Answer Questions"
-                    description="Provide brief answers to the following questions."
-                    questions={examJSON.shortAnswer}
-                    answers={answers}
-                    showAnswers={true}
-                    showHints={showHints}
-                    onAnswerChange={onAnswerChange}
-                    textAnswersFeedback={textAnswersFeedback}
-                  />
+{Array.isArray(examJSON.multipleChoice) && examJSON.multipleChoice.length > 0 && (
+  <ExamSection
+    title="Multiple Choice Questions"
+    description="Select the best answer for each question."
+    questions={examJSON.multipleChoice}
+    answers={answers}
+    showHints={showHints}
+    onAnswerChange={onAnswerChange}
+  />
+)}
+{Array.isArray(examJSON.trueFalse) && examJSON.trueFalse.length > 0 && (
+  <ExamSection
+    title="True/False Questions"
+    description="Indicate whether each statement is true or false."
+    questions={examJSON.trueFalse}
+    answers={answers}
+    showHints={showHints}
+    onAnswerChange={onAnswerChange}
+  />
+)}
+{Array.isArray(examJSON.checkbox) && examJSON.checkbox.length > 0 && (
+  <ExamSection
+    title="Checkbox Questions"
+    description="Select ALL correct answers for each question."
+    questions={examJSON.checkbox}
+    answers={answers}
+    showHints={showHints}
+    onAnswerChange={onAnswerChange}
+  />
+)}
+{Array.isArray(examJSON.shortAnswer) && examJSON.shortAnswer.length > 0 && (
+  <ExamSection
+    title="Short Answer Questions"
+    description="Provide brief answers to the following questions."
+    questions={examJSON.shortAnswer}
+    answers={answers}
+    showHints={showHints}
+    onAnswerChange={onAnswerChange}
+  />
+)}
                 </div>
               </div>
             ) : (
