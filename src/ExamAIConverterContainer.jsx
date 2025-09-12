@@ -547,7 +547,7 @@ content:
       model,
       messages: prompt,
       temperature: 0.2,
-      max_tokens: 4096,
+      max_tokens: 11000,
       tools: [EXAM_FUNCTION],
       tool_choice: { type: "function", function: { name: "return_exam" } } // force structured output
     });
