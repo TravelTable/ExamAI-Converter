@@ -12,7 +12,7 @@ const TOKEN_KEY = "examAI:tokenUsage";
 const DEFAULT_MODEL = "gpt-3.5-turbo";
 const MODELS = [
   { id: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
-  { id: "gpt-4", label: "GPT-4" }
+  { id: "gpt-4.1", label: "GPT-4.1" }
 ];
 
 // --- OpenAI Function Schema (forces JSON) ---
