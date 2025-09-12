@@ -187,7 +187,6 @@ async function callOpenAI({
   return data;
 }
 
-
 // --- Helper: Token Estimation ---
 function estimateTokens(str) {
   // Rough estimate: 1 token ≈ 4 chars English
@@ -355,12 +354,12 @@ export default function ExamAIConverterContainer() {
   const [showHints, setShowHints] = useState(false);
 
   // --- Timer/Progress State ---
-const [timer, setTimer] = useState(60 * 60); // seconds
-const [timerActive, setTimerActive] = useState(false);
-const [timerEnabled, setTimerEnabled] = useState(true);
-const [aiSuggestedTime, setAiSuggestedTime] = useState(null);
-const timerRef = useRef();
-const [sessionHash, setSessionHash] = useState(null);
+  const [timer, setTimer] = useState(60 * 60); // seconds
+  const [timerActive, setTimerActive] = useState(false);
+  const [timerEnabled, setTimerEnabled] = useState(true);
+  const [aiSuggestedTime, setAiSuggestedTime] = useState(null);
+  const timerRef = useRef();
+  const [sessionHash, setSessionHash] = useState(null);
 
   // --- History State ---
   const [historyTab, setHistoryTab] = useState(false);
@@ -440,21 +439,21 @@ const [sessionHash, setSessionHash] = useState(null);
   }, []);
 
   // --- Timer Logic ---
-useEffect(() => {
-  if (!timerActive || !timerEnabled) return;
-  timerRef.current = setInterval(() => {
-    setTimer(prev => {
-      if (prev <= 1) {
-        clearInterval(timerRef.current);
-        handleAutoSubmit();
-        return 0;
-      }
-      return prev - 1;
-    });
-  }, 1000);
-  return () => clearInterval(timerRef.current);
-  // eslint-disable-next-line
-}, [timerActive, timerEnabled]);
+  useEffect(() => {
+    if (!timerActive || !timerEnabled) return;
+    timerRef.current = setInterval(() => {
+      setTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          handleAutoSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timerRef.current);
+    // eslint-disable-next-line
+  }, [timerActive, timerEnabled]);
 
   // --- Progress Calculation ---
   const totalQuestions = examJSON
@@ -516,114 +515,114 @@ useEffect(() => {
   };
 
   // --- Process Exam Handler (Text or OCR) ---
-const handleProcessExam = async () => {
-  setIsProcessing(true);
-  setError("");
+  const handleProcessExam = async () => {
+    setIsProcessing(true);
+    setError("");
 
-  const text = uploadType === "image" ? ocrText : rawText;
-  if (!text.trim()) {
-    setError("No exam text to process.");
-    setIsProcessing(false);
-    return;
-  }
-
-  try {
-    const prompt = [
-      {
-        role: "system",
-content:
-  "You are an expert exam parser. Extract all questions from the user's exam text. " +
-  "Return ONLY the exam in JSON via the provided function with fields: id, type (radio/checkbox/text), text, options (if any), " +
-  "correctAnswer or correctAnswers (if present), points (int), hint (as an object: {explanation: string, answer: string} where explanation explains the concept but does NOT reveal the answer, and answer is the actual answer), sampleAnswer (if present), and a suggestedTime (in seconds, integer, for the whole exam, based on difficulty and length). " +
-  "If no answer key is present, set correctAnswer(s) to null. For each hint, do NOT reveal the answer in the explanation field."
-      },
-      { role: "user", content: text }
-    ];
-
-    const tokensPrompt = estimateTokens(prompt.map(m => m.content).join("\n"));
-
-    const data = await callOpenAI({
-      apiKey,
-      model,
-      messages: prompt,
-      temperature: 0.2,
-      max_tokens: 11000,
-      tools: [EXAM_FUNCTION],
-      tool_choice: { type: "function", function: { name: "return_exam" } } // force structured output
-    });
-
-    // Defensive: handle truncated/partial JSON from OpenAI
-let exam;
-try {
-  exam = extractExamFromResponse(data);
-} catch (e) {
-  // Try to recover from partial/truncated JSON in tool_calls
-  const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-  if (toolCall && typeof toolCall === "string") {
-    // Try to find the largest valid JSON substring
-    let jsonStr = toolCall;
-    // Try to close the last array/object if truncated
-    if (jsonStr.lastIndexOf("]") < jsonStr.lastIndexOf("[")) jsonStr += "]";
-    if (jsonStr.lastIndexOf("}") < jsonStr.lastIndexOf("{")) jsonStr += "}";
-    try {
-      exam = robustLLMJsonParse(jsonStr);
-      exam = normalizeExamStructure(exam);
-    } catch (e2) {
-      setError("Exam data was truncated or incomplete. Please try again or reduce exam length.");
+    const text = uploadType === "image" ? ocrText : rawText;
+    if (!text.trim()) {
+      setError("No exam text to process.");
       setIsProcessing(false);
       return;
     }
-  } else {
-    setError("Failed to parse exam data. Please try again.");
-    setIsProcessing(false);
-    return;
-  }
-}
-    const tokensResponse = estimateTokens(JSON.stringify(exam));
 
-    // AI suggested time
-    let suggestedTime = 60 * 60;
-    if (data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments) {
-      try {
-        const args = robustLLMJsonParse(data.choices[0].message.tool_calls[0].function.arguments);
-        if (args.suggestedTime && Number.isInteger(args.suggestedTime)) {
-          suggestedTime = args.suggestedTime;
-        }
-      } catch {}
-    } else if (exam.suggestedTime && Number.isInteger(exam.suggestedTime)) {
-      suggestedTime = exam.suggestedTime;
-    }
-    setAiSuggestedTime(suggestedTime);
-
-    setTokenUsage(prev => ({
-      session: prev.session + tokensPrompt + tokensResponse,
-      actions: [
-        ...prev.actions,
+    try {
+      const prompt = [
         {
-          type: "processExam",
-          tokens: tokensPrompt + tokensResponse,
-          prompt: tokensPrompt,
-          response: tokensResponse,
-          timestamp: Date.now()
+          role: "system",
+          content:
+            "You are an expert exam parser. Extract all questions from the user's exam text. " +
+            "Return ONLY the exam in JSON via the provided function with fields: id, type (radio/checkbox/text), text, options (if any), " +
+            "correctAnswer or correctAnswers (if present), points (int), hint (as an object: {explanation: string, answer: string} where explanation explains the concept but does NOT reveal the answer, and answer is the actual answer), sampleAnswer (if present), and a suggestedTime (in seconds, integer, for the whole exam, based on difficulty and length). " +
+            "If no answer key is present, set correctAnswer(s) to null. For each hint, do NOT reveal the answer in the explanation field."
+        },
+        { role: "user", content: text }
+      ];
+
+      const tokensPrompt = estimateTokens(prompt.map(m => m.content).join("\n"));
+
+      const data = await callOpenAI({
+        apiKey,
+        model,
+        messages: prompt,
+        temperature: 0.2,
+        max_tokens: 11000,
+        tools: [EXAM_FUNCTION],
+        tool_choice: { type: "function", function: { name: "return_exam" } } // force structured output
+      });
+
+      // Defensive: handle truncated/partial JSON from OpenAI
+      let exam;
+      try {
+        exam = extractExamFromResponse(data);
+      } catch (e) {
+        // Try to recover from partial/truncated JSON in tool_calls
+        const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+        if (toolCall && typeof toolCall === "string") {
+          // Try to find the largest valid JSON substring
+          let jsonStr = toolCall;
+          // Try to close the last array/object if truncated
+          if (jsonStr.lastIndexOf("]") < jsonStr.lastIndexOf("[")) jsonStr += "]";
+          if (jsonStr.lastIndexOf("}") < jsonStr.lastIndexOf("{")) jsonStr += "}";
+          try {
+            exam = robustLLMJsonParse(jsonStr);
+            exam = normalizeExamStructure(exam);
+          } catch (e2) {
+            setError("Exam data was truncated or incomplete. Please try again or reduce exam length.");
+            setIsProcessing(false);
+            return;
+          }
+        } else {
+          setError("Failed to parse exam data. Please try again.");
+          setIsProcessing(false);
+          return;
         }
-      ]
-    }));
+      }
+      const tokensResponse = estimateTokens(JSON.stringify(exam));
 
-    setExamJSON(exam);
-    setExamCompleted(false);
-    setExamScore(null);
-    setAnswers({});
-    setTextAnswersFeedback({});
-    setTimerEnabled(true);
-    setTimer(suggestedTime);
-    setTimerActive(true);
-    setSessionHash(hashString(JSON.stringify(exam)));
-  } catch (e) {
-    setError(e.message || "Failed to process exam.");
-  }
+      // AI suggested time
+      let suggestedTime = 60 * 60;
+      if (data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments) {
+        try {
+          const args = robustLLMJsonParse(data.choices[0].message.tool_calls[0].function.arguments);
+          if (args.suggestedTime && Number.isInteger(args.suggestedTime)) {
+            suggestedTime = args.suggestedTime;
+          }
+        } catch {}
+      } else if (exam.suggestedTime && Number.isInteger(exam.suggestedTime)) {
+        suggestedTime = exam.suggestedTime;
+      }
+      setAiSuggestedTime(suggestedTime);
 
-  setIsProcessing(false);
-};
+      setTokenUsage(prev => ({
+        session: prev.session + tokensPrompt + tokensResponse,
+        actions: [
+          ...prev.actions,
+          {
+            type: "processExam",
+            tokens: tokensPrompt + tokensResponse,
+            prompt: tokensPrompt,
+            response: tokensResponse,
+            timestamp: Date.now()
+          }
+        ]
+      }));
+
+      setExamJSON(exam);
+      setExamCompleted(false);
+      setExamScore(null);
+      setAnswers({});
+      setTextAnswersFeedback({});
+      setTimerEnabled(true);
+      setTimer(suggestedTime);
+      setTimerActive(true);
+      setSessionHash(hashString(JSON.stringify(exam)));
+    } catch (e) {
+      setError(e.message || "Failed to process exam.");
+    }
+
+    setIsProcessing(false);
+  };
 
   // --- Submit Exam Handler ---
   const handleSubmitExam = async () => {
@@ -718,30 +717,30 @@ try {
               max_tokens: 256
             });
             const responseContent = data.choices[0].message.content;
-const response = typeof responseContent === "string" ? responseContent.trim() : "";
-const tokensResponse = estimateTokens(response);
-setTokenUsage(prev => ({
-  session: prev.session + tokensPrompt + tokensResponse,
-  actions: [
-    ...prev.actions,
-    {
-      type: "processExam",
-      tokens: tokensPrompt + tokensResponse,
-      prompt: tokensPrompt,
-      response: tokensResponse,
-      timestamp: Date.now()
-    }
-  ]
-}));
-// Parse JSON
-let parsed;
-try {
-  parsed = robustLLMJsonParse(response);
-} catch (e) {
-  setError("Failed to parse generated exam JSON. Please try again.");
-  setIsProcessing(false);
-  return;
-}
+            const response = typeof responseContent === "string" ? responseContent.trim() : "";
+            const tokensResponse = estimateTokens(response);
+            setTokenUsage(prev => ({
+              session: prev.session + tokensPrompt + tokensResponse,
+              actions: [
+                ...prev.actions,
+                {
+                  type: "processExam",
+                  tokens: tokensPrompt + tokensResponse,
+                  prompt: tokensPrompt,
+                  response: tokensResponse,
+                  timestamp: Date.now()
+                }
+              ]
+            }));
+            // Parse JSON
+            let parsed;
+            try {
+              parsed = robustLLMJsonParse(response);
+            } catch (e) {
+              setError("Failed to parse generated exam JSON. Please try again.");
+              setIsProcessing(false);
+              return;
+            }
             const pts = Math.min(q.points || 1, Math.max(0, parsed.score));
             score.shortAnswer.earned += pts;
             score.earned += pts;
@@ -795,17 +794,17 @@ try {
               }
             ]
           }));
-let parsed;
-try {
-  parsed = robustLLMJsonParse(response);
-} catch (e) {
-  feedback[q.id] = {
-    score: 0,
-    feedback: "Could not grade answer (invalid model response).",
-    maxScore: q.points || 1
-  };
-  // No continue; just let the loop proceed
-}
+          let parsed;
+          try {
+            parsed = robustLLMJsonParse(response);
+          } catch (e) {
+            feedback[q.id] = {
+              score: 0,
+              feedback: "Could not grade answer (invalid model response).",
+              maxScore: q.points || 1
+            };
+            // No continue; just let the loop proceed
+          }
           const pts = Math.min(q.points || 1, Math.max(0, parsed.score));
           score.shortAnswer.earned += pts;
           score.earned += pts;
@@ -840,86 +839,83 @@ try {
     setIsProcessing(false);
   };
 
-  
   // --- Auto Submit on Timer End ---
   const handleAutoSubmit = () => {
     if (!examCompleted) handleSubmitExam();
   };
 
   // --- Generate New Exam Handler ---
-const handleGenerateNewExam = async () => {
-  setIsProcessing(true);
-  setError("");
+  const handleGenerateNewExam = async () => {
+    setIsProcessing(true);
+    setError("");
 
-  try {
-    let prompt;
-    if (examJSON) {
-      prompt = [
-        {
-          role: "system",
-          content:
-            "You are an expert exam generator. Given the following exam JSON, generate a NEW exam with the SAME learning objectives, " +
-            "difficulty, section counts, and point totals, but with DIFFERENT questions/wording. Return ONLY via the provided function."
-        },
-        { role: "user", content: JSON.stringify(examJSON) }
-      ];
-    } else {
-      prompt = [
-        {
-          role: "system",
-          content:
-            "You are an expert exam generator. Generate a new exam for the given subject and difficulty. " +
-            "Return ONLY via the provided function with sections for multipleChoice, trueFalse, checkbox, shortAnswer."
-        },
-        { role: "user", content: "Subject: Biology\nDifficulty: Medium" }
-      ];
+    try {
+      let prompt;
+      if (examJSON) {
+        prompt = [
+          {
+            role: "system",
+            content:
+              "You are an expert exam generator. Given the following exam JSON, generate a NEW exam with the SAME learning objectives, " +
+              "difficulty, section counts, and point totals, but with DIFFERENT questions/wording. Return ONLY via the provided function."
+          },
+          { role: "user", content: JSON.stringify(examJSON) }
+        ];
+      } else {
+        prompt = [
+          {
+            role: "system",
+            content:
+              "You are an expert exam generator. Generate a new exam for the given subject and difficulty. " +
+              "Return ONLY via the provided function with sections for multipleChoice, trueFalse, checkbox, shortAnswer."
+          },
+          { role: "user", content: "Subject: Biology\nDifficulty: Medium" }
+        ];
+      }
+
+      const tokensPrompt = estimateTokens(prompt.map(m => m.content).join("\n"));
+
+      const data = await callOpenAI({
+        apiKey,
+        model,
+        messages: prompt,
+        temperature: 0.3,
+        max_tokens: 2048,
+        tools: [EXAM_FUNCTION],
+        tool_choice: { type: "function", function: { name: "return_exam" } }
+      });
+
+      const exam = extractExamFromResponse(data);
+      const tokensResponse = estimateTokens(JSON.stringify(exam));
+
+      setTokenUsage(prev => ({
+        session: prev.session + tokensPrompt + tokensResponse,
+        actions: [
+          ...prev.actions,
+          {
+            type: "generateExam",
+            tokens: tokensPrompt + tokensResponse,
+            prompt: tokensPrompt,
+            response: tokensResponse,
+            timestamp: Date.now()
+          }
+        ]
+      }));
+
+      setExamJSON(exam);
+      setExamCompleted(false);
+      setExamScore(null);
+      setAnswers({});
+      setTextAnswersFeedback({});
+      setTimer(60 * 60);
+      setTimerActive(true);
+      setSessionHash(hashString(JSON.stringify(exam)));
+    } catch (e) {
+      setError(e.message || "Failed to generate new exam.");
     }
 
-    const tokensPrompt = estimateTokens(prompt.map(m => m.content).join("\n"));
-
-    const data = await callOpenAI({
-      apiKey,
-      model,
-      messages: prompt,
-      temperature: 0.3,
-      max_tokens: 2048,
-      tools: [EXAM_FUNCTION],
-      tool_choice: { type: "function", function: { name: "return_exam" } }
-    });
-
-    const exam = extractExamFromResponse(data);
-    const tokensResponse = estimateTokens(JSON.stringify(exam));
-
-    setTokenUsage(prev => ({
-      session: prev.session + tokensPrompt + tokensResponse,
-      actions: [
-        ...prev.actions,
-        {
-          type: "generateExam",
-          tokens: tokensPrompt + tokensResponse,
-          prompt: tokensPrompt,
-          response: tokensResponse,
-          timestamp: Date.now()
-        }
-      ]
-    }));
-
-    setExamJSON(exam);
-    setExamCompleted(false);
-    setExamScore(null);
-    setAnswers({});
-    setTextAnswersFeedback({});
-    setTimer(60 * 60);
-    setTimerActive(true);
-    setSessionHash(hashString(JSON.stringify(exam)));
-  } catch (e) {
-    setError(e.message || "Failed to generate new exam.");
-  }
-
-  setIsProcessing(false);
-};
-
-
+    setIsProcessing(false);
+  };
 
   // --- Answer Change Handler ---
   const handleAnswerChange = (questionId, value, isCheckbox = false) => {
@@ -970,38 +966,38 @@ const handleGenerateNewExam = async () => {
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between">
             <div>
-<button
-  className="text-3xl font-bold flex items-center focus:outline-none hover:underline"
-  onClick={() => {
-    // Remove current exam session from localStorage
-    if (sessionHash) {
-      localStorage.removeItem(SESSION_KEY_PREFIX + sessionHash);
-    }
-    setUploadType("none");
-    setIsProcessing(false);
-    setOcrText("");
-    setOcrFileName("");
-    setRawText("");
-    setExamJSON(null);
-    setExamCompleted(false);
-    setExamScore(null);
-    setAnswers({});
-    setTextAnswersFeedback({});
-    setTimer(60 * 60);
-    setTimerActive(false);
-    setSessionHash(null);
-    setHelpPanelOpen(false);
-    setActiveHelpTool(null);
-    setShowHints(false);
-    setError("");
-    setHistoryTab(false);
-  }}
-  style={{ background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer" }}
-  type="button"
->
-  <Brain className="h-8 w-8 mr-3" />
-  ExamAI Converter
-</button>
+              <button
+                className="text-3xl font-bold flex items-center focus:outline-none hover:underline"
+                onClick={() => {
+                  // Remove current exam session from localStorage
+                  if (sessionHash) {
+                    localStorage.removeItem(SESSION_KEY_PREFIX + sessionHash);
+                  }
+                  setUploadType("none");
+                  setIsProcessing(false);
+                  setOcrText("");
+                  setOcrFileName("");
+                  setRawText("");
+                  setExamJSON(null);
+                  setExamCompleted(false);
+                  setExamScore(null);
+                  setAnswers({});
+                  setTextAnswersFeedback({});
+                  setTimer(60 * 60);
+                  setTimerActive(false);
+                  setSessionHash(null);
+                  setHelpPanelOpen(false);
+                  setActiveHelpTool(null);
+                  setShowHints(false);
+                  setError("");
+                  setHistoryTab(false);
+                }}
+                style={{ background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer" }}
+                type="button"
+              >
+                <Brain className="h-8 w-8 mr-3" />
+                ExamAI Converter
+              </button>
               <p className="text-indigo-100 mt-1">
                 All processing happens locally in your browser. Your API key is stored only on this device if you choose.
               </p>
@@ -1243,30 +1239,30 @@ const handleGenerateNewExam = async () => {
           </div>
         ) : (
           <ExamView
-  examJSON={examJSON}
-  answers={answers}
-  onAnswerChange={handleAnswerChange}
-  showHints={showHints}
-  setShowHints={setShowHints}
-  helpPanelOpen={helpPanelOpen}
-  setHelpPanelOpen={setHelpPanelOpen}
-  activeHelpTool={activeHelpTool}
-  setActiveHelpTool={setActiveHelpTool}
-  examCompleted={examCompleted}
-  examScore={examScore}
-  textAnswersFeedback={textAnswersFeedback}
-  onSubmitExam={handleSubmitExam}
-  isProcessing={isProcessing}
-  onGenerateNewExam={handleGenerateNewExam}
-  timer={timer}
-  totalQuestions={totalQuestions}
-  answeredCount={answeredCount}
-  tokenUsage={tokenUsage}
-  canSubmit={answeredCount === totalQuestions}
-  timerEnabled={timerEnabled}
-  setTimerEnabled={setTimerEnabled}
-  aiSuggestedTime={aiSuggestedTime}
-/>
+            examJSON={examJSON}
+            answers={answers}
+            onAnswerChange={handleAnswerChange}
+            showHints={showHints}
+            setShowHints={setShowHints}
+            helpPanelOpen={helpPanelOpen}
+            setHelpPanelOpen={setHelpPanelOpen}
+            activeHelpTool={activeHelpTool}
+            setActiveHelpTool={setActiveHelpTool}
+            examCompleted={examCompleted}
+            examScore={examScore}
+            textAnswersFeedback={textAnswersFeedback}
+            onSubmitExam={handleSubmitExam}
+            isProcessing={isProcessing}
+            onGenerateNewExam={handleGenerateNewExam}
+            timer={timer}
+            totalQuestions={totalQuestions}
+            answeredCount={answeredCount}
+            tokenUsage={tokenUsage}
+            canSubmit={answeredCount === totalQuestions}
+            timerEnabled={timerEnabled}
+            setTimerEnabled={setTimerEnabled}
+            aiSuggestedTime={aiSuggestedTime}
+          />
         )}
       </main>
     </div>
@@ -1449,7 +1445,7 @@ function ExamView({
                     className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition shadow-md flex items-center"
                     disabled={isProcessing}
                   >
-                    <RefreshCw className="h-4 w-4 mr-2" /> Generate New Exam
+                    <RefreshCw className="h-5 w-5 mr-2" /> Generate New Exam
                   </button>
                 )}
               </div>
@@ -1534,46 +1530,46 @@ function ExamView({
                     <Eye className="h-6 w-6 mr-2 text-indigo-600" />
                     Detailed Review
                   </h3>
-{Array.isArray(examJSON.multipleChoice) && examJSON.multipleChoice.length > 0 && (
-  <ExamSection
-    title="Multiple Choice Questions"
-    description="Select the best answer for each question."
-    questions={examJSON.multipleChoice}
-    answers={answers}
-    showHints={showHints}
-    onAnswerChange={onAnswerChange}
-  />
-)}
-{Array.isArray(examJSON.trueFalse) && examJSON.trueFalse.length > 0 && (
-  <ExamSection
-    title="True/False Questions"
-    description="Indicate whether each statement is true or false."
-    questions={examJSON.trueFalse}
-    answers={answers}
-    showHints={showHints}
-    onAnswerChange={onAnswerChange}
-  />
-)}
-{Array.isArray(examJSON.checkbox) && examJSON.checkbox.length > 0 && (
-  <ExamSection
-    title="Checkbox Questions"
-    description="Select ALL correct answers for each question."
-    questions={examJSON.checkbox}
-    answers={answers}
-    showHints={showHints}
-    onAnswerChange={onAnswerChange}
-  />
-)}
-{Array.isArray(examJSON.shortAnswer) && examJSON.shortAnswer.length > 0 && (
-  <ExamSection
-    title="Short Answer Questions"
-    description="Provide brief answers to the following questions."
-    questions={examJSON.shortAnswer}
-    answers={answers}
-    showHints={showHints}
-    onAnswerChange={onAnswerChange}
-  />
-)}
+                  {Array.isArray(examJSON.multipleChoice) && examJSON.multipleChoice.length > 0 && (
+                    <ExamSection
+                      title="Multiple Choice Questions"
+                      description="Select the best answer for each question."
+                      questions={examJSON.multipleChoice}
+                      answers={answers}
+                      showHints={showHints}
+                      onAnswerChange={onAnswerChange}
+                    />
+                  )}
+                  {Array.isArray(examJSON.trueFalse) && examJSON.trueFalse.length > 0 && (
+                    <ExamSection
+                      title="True/False Questions"
+                      description="Indicate whether each statement is true or false."
+                      questions={examJSON.trueFalse}
+                      answers={answers}
+                      showHints={showHints}
+                      onAnswerChange={onAnswerChange}
+                    />
+                  )}
+                  {Array.isArray(examJSON.checkbox) && examJSON.checkbox.length > 0 && (
+                    <ExamSection
+                      title="Checkbox Questions"
+                      description="Select ALL correct answers for each question."
+                      questions={examJSON.checkbox}
+                      answers={answers}
+                      showHints={showHints}
+                      onAnswerChange={onAnswerChange}
+                    />
+                  )}
+                  {Array.isArray(examJSON.shortAnswer) && examJSON.shortAnswer.length > 0 && (
+                    <ExamSection
+                      title="Short Answer Questions"
+                      description="Provide brief answers to the following questions."
+                      questions={examJSON.shortAnswer}
+                      answers={answers}
+                      showHints={showHints}
+                      onAnswerChange={onAnswerChange}
+                    />
+                  )}
                 </div>
               </div>
             ) : (
@@ -1630,18 +1626,18 @@ function ExamView({
             )}
           </div>
         </div>
-{helpPanelOpen && (
-  <div className="w-[420px] min-w-[380px] max-w-[520px] pl-6 transition-all duration-300">
-    <div className="bg-white rounded-xl shadow-lg border border-indigo-100 sticky top-4">
+        {helpPanelOpen && (
+          <div className="w-[420px] min-w-[380px] max-w-[520px] pl-6 transition-all duration-300">
+            <div className="bg-white rounded-xl shadow-lg border border-indigo-100 sticky top-4">
               <div className="p-6 border-b border-gray-200">
-  <h3 className="text-xl font-bold text-gray-800 flex items-center">
-    <HelpCircle className="h-6 w-6 mr-2 text-indigo-600" />
-    Exam Help Tools
-  </h3>
-  <p className="text-gray-500 text-base mt-1">AI-powered assistance for your exam</p>
-</div>
-<div className="p-4">
-  <div className="grid grid-cols-2 gap-4">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center">
+                  <HelpCircle className="h-6 w-6 mr-2 text-indigo-600" />
+                  Exam Help Tools
+                </h3>
+                <p className="text-gray-500 text-base mt-1">AI-powered assistance for your exam</p>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-4">
                   <HelpToolButton
                     icon={BookOpen}
                     label="Key Concepts"
@@ -1726,12 +1722,12 @@ function ExamView({
                   </div>
                 )}
                 {activeHelpTool === "tutor" && (
-  <AITutorChat
-    apiKey={typeof window !== "undefined" ? localStorage.getItem("examAI:settings") ? JSON.parse(localStorage.getItem("examAI:settings")).apiKey : "" : ""}
-    model={typeof window !== "undefined" ? localStorage.getItem("examAI:settings") ? JSON.parse(localStorage.getItem("examAI:settings")).model : "gpt-3.5-turbo" : "gpt-3.5-turbo"}
-    examJSON={examJSON}
-  />
-)}
+                  <AITutorChat
+                    apiKey={typeof window !== "undefined" ? localStorage.getItem("examAI:settings") ? JSON.parse(localStorage.getItem("examAI:settings")).apiKey : "" : ""}
+                    model={typeof window !== "undefined" ? localStorage.getItem("examAI:settings") ? JSON.parse(localStorage.getItem("examAI:settings")).model : "gpt-3.5-turbo" : "gpt-3.5-turbo"}
+                    examJSON={examJSON}
+                  />
+                )}
                 {activeHelpTool === "search" && (
                   <div className="space-y-4">
                     <h4 className="font-medium text-gray-700">Search Concepts</h4>
@@ -2265,6 +2261,7 @@ function Send(props) {
     </svg>
   );
 }
+
 // --- AI Tutor Chat ---
 function AITutorChat({ apiKey, model, examJSON }) {
   const [messages, setMessages] = useState([
@@ -2277,7 +2274,8 @@ function AITutorChat({ apiKey, model, examJSON }) {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
   const chatBottomRef = useRef(null);
-const [popupContent, setPopupContent] = useState(null);
+  const [popupContent, setPopupContent] = useState(null);
+
   // Scroll to bottom on new message
   useEffect(() => {
     if (chatBottomRef.current) {
@@ -2339,76 +2337,75 @@ const [popupContent, setPopupContent] = useState(null);
       <div className="bg-gray-100 rounded-lg p-4 h-[420px] flex flex-col">
         <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
           {messages.map((msg, i) => (
-  <div
-    key={i}
-    className={
-      msg.role === "assistant"
-        ? "bg-indigo-100 text-indigo-800 p-2 rounded-lg max-w-[80%] ml-auto cursor-pointer hover:bg-indigo-200 transition"
-        : "bg-white p-2 rounded-lg max-w-[80%]"
-    }
-    onClick={
-      msg.role === "assistant"
-        ? () => setPopupContent(msg.content)
-        : undefined
-    }
-    tabIndex={msg.role === "assistant" ? 0 : undefined}
-    style={msg.role === "assistant" ? { outline: "none" } : undefined}
-    onKeyDown={
-      msg.role === "assistant"
-        ? (e) => {
-            if (e.key === "Enter" || e.key === " ") setPopupContent(msg.content);
-          }
-        : undefined
-    }
-    aria-label={msg.role === "assistant" ? "Show full response" : undefined}
-  >
-    {msg.content}
-  </div>
-  
-))}
+            <div
+              key={i}
+              className={
+                msg.role === "assistant"
+                  ? "bg-indigo-100 text-indigo-800 p-2 rounded-lg max-w-[80%] ml-auto cursor-pointer hover:bg-indigo-200 transition"
+                  : "bg-white p-2 rounded-lg max-w-[80%]"
+              }
+              onClick={
+                msg.role === "assistant"
+                  ? () => setPopupContent(msg.content)
+                  : undefined
+              }
+              tabIndex={msg.role === "assistant" ? 0 : undefined}
+              style={msg.role === "assistant" ? { outline: "none" } : undefined}
+              onKeyDown={
+                msg.role === "assistant"
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") setPopupContent(msg.content);
+                    }
+                  : undefined
+              }
+              aria-label={msg.role === "assistant" ? "Show full response" : undefined}
+            >
+              {msg.content}
+            </div>
+          ))}
           <div ref={chatBottomRef} />
         </div>
         <div className="flex">
-         <input
-  type="text"
-  placeholder="Ask a question about the exam..."
-  className="flex-1 border border-gray-300 rounded-l-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500"
-  value={input}
-  onChange={e => setInput(e.target.value)}
-  onKeyDown={handleInputKeyDown}
-  disabled={isSending}
-/>
-<button
-  className="bg-indigo-600 text-white px-5 py-3 rounded-r-lg hover:bg-indigo-700"
-  onClick={handleSend}
-  disabled={isSending || !input.trim()}
->
-  <Send className="h-6 w-6" />
-</button>
+          <input
+            type="text"
+            placeholder="Ask a question about the exam..."
+            className="flex-1 border border-gray-300 rounded-l-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleInputKeyDown}
+            disabled={isSending}
+          />
+          <button
+            className="bg-indigo-600 text-white px-5 py-3 rounded-r-lg hover:bg-indigo-700"
+            onClick={handleSend}
+            disabled={isSending || !input.trim()}
+          >
+            <Send className="h-6 w-6" />
+          </button>
         </div>
         {error && (
           <div className="text-red-600 text-xs mt-2">{error}</div>
         )}
       </div>
-<p className="text-gray-500 text-sm text-center mt-2">
-  AI tutor provides personalized help without giving away answers
-</p>
-{popupContent && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-    <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-8 relative">
-      <button
-        className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-        onClick={() => setPopupContent(null)}
-        aria-label="Close"
-      >
-        <X className="h-6 w-6" />
-      </button>
-      <div className="text-lg text-gray-800 whitespace-pre-line break-words">
-        {popupContent}
-      </div>
-    </div>
-  </div>
-)}
+      <p className="text-gray-500 text-sm text-center mt-2">
+        AI tutor provides personalized help without giving away answers
+      </p>
+      {popupContent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-8 relative">
+            <button
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+              onClick={() => setPopupContent(null)}
+              aria-label="Close"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <div className="text-lg text-gray-800 whitespace-pre-line break-words">
+              {popupContent}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
