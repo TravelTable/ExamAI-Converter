@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  Upload, FileText, Image, Check, X, HelpCircle, AlertTriangle, RefreshCw, Award, Brain, BookOpen, Clock, Zap, CheckCircle, XCircle, Sparkles, BarChart, PenTool, Eye, Lightbulb, Calculator, MessageCircle, Search, ExternalLink, Bookmark, Settings, Info, RotateCcw, Layers, List, Maximize, Minimize, ChevronRight, ChevronLeft, Coffee, Compass
+  Upload, FileText, Image, Check, X, HelpCircle, AlertTriangle, RefreshCw, Award, Brain, BookOpen, Clock, Zap, CheckCircle, XCircle, Sparkles, BarChart, PenTool, Eye, Lightbulb, Calculator, MessageCircle, Search, ExternalLink, Bookmark, Settings, Info, RotateCcw, Layers, List, Maximize, Minimize, ChevronRight, ChevronLeft, Coffee, Compass,
+  Mic, MicOff, Volume2, VolumeX, StopCircle, Play, Pause
 } from "lucide-react";
 import Tesseract from "tesseract.js";
 
@@ -1265,6 +1266,13 @@ export default function ExamAIConverterContainer() {
           />
         )}
       </main>
+
+      {/* Floating AI Voice Tutor */}
+      <VoiceTutor
+        apiKey={apiKey}
+        model={model}
+        examJSON={examJSON}
+      />
     </div>
   );
 }
@@ -1728,6 +1736,7 @@ function ExamView({
                     examJSON={examJSON}
                   />
                 )}
+                
                 {activeHelpTool === "search" && (
                   <div className="space-y-4">
                     <h4 className="font-medium text-gray-700">Search Concepts</h4>
@@ -2240,6 +2249,336 @@ function HistoryTab({ history }) {
     </div>
   );
 }
+
+// --- Voice Tutor (Floating Mic) ---
+function VoiceTutor({ apiKey, model, examJSON }) {
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [muted, setMuted] = useState(false);
+
+  const [interim, setInterim] = useState("");
+  const [finalText, setFinalText] = useState("");
+  const [assistantText, setAssistantText] = useState("");
+
+  const [error, setError] = useState("");
+
+  const recognitionRef = useRef(null);
+  const endSilenceTimerRef = useRef(null);
+  const ttsUtteranceRef = useRef(null);
+  const stopRequestedRef = useRef(false);
+
+  // Support flags
+  const hasSTT = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const hasTTS = typeof window !== "undefined" && window.speechSynthesis;
+
+  // Kill any speaking when we start listening
+  useEffect(() => {
+    if (listening && hasTTS && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+    }
+  }, [listening, hasTTS]);
+
+  // Cleanup timers / speech on unmount
+  useEffect(() => {
+    return () => {
+      if (endSilenceTimerRef.current) clearTimeout(endSilenceTimerRef.current);
+      if (hasTTS) window.speechSynthesis.cancel();
+      if (recognitionRef.current) recognitionRef.current.stop();
+    };
+  }, [hasTTS]);
+
+  const speak = (text) => {
+    if (!hasTTS || muted || !text) return;
+    try {
+      window.speechSynthesis.cancel(); // stop anything queued
+      const u = new SpeechSynthesisUtterance(text);
+      // Pick a reasonable voice (optional); default works across browsers
+      u.rate = 1.0;
+      u.pitch = 1.0;
+      u.onstart = () => setSpeaking(true);
+      u.onend = () => setSpeaking(false);
+      ttsUtteranceRef.current = u;
+      window.speechSynthesis.speak(u);
+    } catch (e) {
+      setError("Speech synthesis failed.");
+      setSpeaking(false);
+    }
+  };
+
+  const stopSpeaking = () => {
+    if (!hasTTS) return;
+    window.speechSynthesis.cancel();
+    setSpeaking(false);
+  };
+
+  const stopListening = () => {
+    stopRequestedRef.current = true;
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+    }
+    setListening(false);
+  };
+
+  const startListening = () => {
+    setError("");
+    if (!hasSTT) {
+      setError("This browser does not support microphone transcription.");
+      return;
+    }
+    // If we’re speaking now, cut it
+    stopSpeaking();
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    recognitionRef.current = rec;
+
+    rec.lang = "en-AU";              // use AU by default; change if you want
+    rec.interimResults = true;       // we want interim
+    rec.continuous = true;           // keep going until we decide to stop
+
+    let collectedFinal = "";
+
+    rec.onresult = (event) => {
+      if (endSilenceTimerRef.current) {
+        clearTimeout(endSilenceTimerRef.current);
+        endSilenceTimerRef.current = null;
+      }
+
+      let interimStr = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const res = event.results[i];
+        if (res.isFinal) {
+          collectedFinal += res[0].transcript + " ";
+        } else {
+          interimStr += res[0].transcript;
+        }
+      }
+      setInterim(interimStr);
+      setFinalText(collectedFinal.trim());
+
+      // If user goes silent for ~900ms after last audio, auto-stop & answer
+      endSilenceTimerRef.current = setTimeout(async () => {
+        stopListening();
+        const text = (collectedFinal || interimStr).trim();
+        if (text) await respondTo(text);
+      }, 900);
+    };
+
+    rec.onerror = (e) => {
+      // Abort errors are normal when we manually stop
+      if (e?.error !== "aborted") setError(`Mic error: ${e?.error || "unknown"}`);
+      setListening(false);
+    };
+
+    rec.onend = async () => {
+      setListening(false);
+      // If we ended naturally (no explicit stop) and have text, respond
+      if (!stopRequestedRef.current) {
+        const text = (finalText || interim).trim();
+        if (text) await respondTo(text);
+      }
+      stopRequestedRef.current = false;
+    };
+
+    try {
+      rec.start();
+      setListening(true);
+      setInterim("");
+      setFinalText("");
+    } catch (e) {
+      setError("Microphone permission blocked or already in use.");
+      setListening(false);
+    }
+  };
+
+  const respondTo = async (userText) => {
+    if (!userText) return;
+    if (!apiKey) {
+      setAssistantText("You haven’t set an API key in Settings.");
+      speak("You haven’t set an API key in Settings.");
+      return;
+    }
+    try {
+      // Build a small, focused prompt. Keep token use low.
+      const contextBits = [];
+      if (examJSON?.title) contextBits.push(`Title: ${examJSON.title}`);
+      const sections = Object.keys(examJSON || {}).filter(k => Array.isArray(examJSON[k]) && examJSON[k].length > 0);
+      if (sections.length) contextBits.push(`Sections: ${sections.join(", ")}`);
+
+      const prompt = [
+        {
+          role: "system",
+          content:
+            "You are a concise, friendly voice tutor. " +
+            "Use simple, clear language. Explain concepts and approaches; do NOT give away exact answers to specific exam questions. " +
+            "Keep responses short (20–60 seconds) unless the user explicitly asks for more detail."
+        },
+        ...(contextBits.length ? [{ role: "system", content: `Exam context: ${contextBits.join(" | ")}` }] : []),
+        { role: "user", content: userText }
+      ];
+
+      const data = await callOpenAI({
+        apiKey,
+        model,
+        messages: prompt,
+        temperature: 0.4,
+        max_tokens: 280
+      });
+
+      const text = data?.choices?.[0]?.message?.content?.trim() || "Sorry, I didn’t catch that.";
+      setAssistantText(text);
+
+      // Speak unless muted
+      speak(text);
+    } catch (e) {
+      setAssistantText("AI request failed.");
+      setError(e?.message || "AI request failed.");
+    }
+  };
+
+  const toggleMic = () => {
+    if (listening) {
+      stopListening();     // when user clicks while listening, stop & respond
+      const text = (finalText || interim).trim();
+      if (text) respondTo(text);
+    } else {
+      startListening();
+    }
+  };
+
+  const toggleMute = () => {
+    if (!hasTTS) return;
+    if (!muted && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+    }
+    setMuted(m => !m);
+  };
+
+  // Floating button + small slide-out panel
+  return (
+    <>
+      {/* Floating circular mic button */}
+      <div className="fixed bottom-6 right-6 z-40">
+        <button
+          onClick={() => setPanelOpen(p => !p)}
+          className={`rounded-full shadow-xl p-4 border-2 ${panelOpen ? "bg-indigo-600 border-indigo-700" : "bg-white border-indigo-200"} transition`}
+          aria-label="Open Voice Tutor"
+          title="Voice Tutor"
+        >
+          <Mic className={`h-6 w-6 ${panelOpen ? "text-white" : "text-indigo-700"}`} />
+        </button>
+      </div>
+
+      {/* Panel */}
+      {panelOpen && (
+        <div className="fixed bottom-24 right-6 w-[360px] max-h-[70vh] bg-white rounded-2xl shadow-2xl border border-indigo-100 z-40 flex flex-col overflow-hidden">
+          <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
+            <div className="flex items-center">
+              <Brain className="h-5 w-5 mr-2" />
+              <span className="font-semibold">AI Voice Tutor</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={toggleMute}
+                className="bg-white/15 hover:bg-white/25 rounded-lg p-1.5"
+                title={muted ? "Unmute" : "Mute"}
+              >
+                {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+              </button>
+              <button
+                onClick={() => setPanelOpen(false)}
+                className="bg-white/15 hover:bg-white/25 rounded-lg p-1.5"
+                title="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-3 overflow-y-auto">
+            {!hasSTT && (
+              <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">
+                Your browser doesn’t support speech recognition. Try Chrome on desktop.
+              </div>
+            )}
+            {!hasTTS && (
+              <div className="bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg p-3 text-sm">
+                Speech synthesis isn’t available. I can still transcribe and type answers.
+              </div>
+            )}
+            {error && (
+              <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+              <div className="text-xs text-gray-500 mb-1">You said</div>
+              <div className="min-h-[48px] whitespace-pre-wrap text-gray-800">
+                {finalText || interim || <span className="text-gray-400">Press the mic and ask a question…</span>}
+              </div>
+            </div>
+
+            <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100">
+              <div className="text-xs text-indigo-700 mb-1">Tutor</div>
+              <div className="min-h-[64px] whitespace-pre-wrap text-indigo-900">
+                {assistantText || <span className="text-indigo-400">I’ll answer here (and speak if not muted).</span>}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={toggleMic}
+                className={`px-4 py-2 rounded-lg font-medium shadow ${listening ? "bg-red-600 hover:bg-red-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
+                title={listening ? "Stop & Answer" : "Start Listening"}
+              >
+                <span className="inline-flex items-center">
+                  {listening ? <MicOff className="h-5 w-5 mr-2" /> : <Mic className="h-5 w-5 mr-2" />}
+                  {listening ? "Stop" : "Listen"}
+                </span>
+              </button>
+              <button
+                onClick={() => {
+                  stopListening();
+                  stopSpeaking();
+                  setInterim("");
+                  setFinalText("");
+                }}
+                className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300"
+                title="Stop all"
+              >
+                <StopCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  if (!assistantText) return;
+                  if (speaking) {
+                    stopSpeaking();
+                  } else {
+                    speak(assistantText);
+                  }
+                }}
+                className="px-3 py-2 rounded-lg bg-white hover:bg-gray-50 text-gray-700 border border-gray-300"
+                title={speaking ? "Pause voice" : "Play voice"}
+              >
+                {speaking ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 
 // --- Send Icon ---
 function Send(props) {
