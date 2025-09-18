@@ -1362,6 +1362,24 @@ function SettingsModal({
             ))}
           </select>
         </div>
+        <div className="mb-4">
+  <label htmlFor="voice" className="block font-medium text-gray-700 mb-1">
+    Voice (OpenAI TTS)
+  </label>
+  <select
+    id="voice"
+    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+    value={ttsVoice}
+    onChange={e => setTtsVoice(e.target.value)}
+  >
+    {VOICES.map(v => (
+      <option key={v.id} value={v.id}>{v.label}</option>
+    ))}
+  </select>
+  <div className="text-xs text-gray-500 mt-1">
+    Used by the AI Voice Tutor when speaking answers.
+  </div>
+</div>
         <div className="mb-4 flex items-center">
           <input
             id="saveKey"
