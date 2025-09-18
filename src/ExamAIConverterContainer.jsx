@@ -12,9 +12,20 @@ const HISTORY_KEY = "examHistory";
 const TOKEN_KEY = "examAI:tokenUsage";
 const DEFAULT_MODEL = "gpt-3.5-turbo";
 const MODELS = [
-  { id: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
-  { id: "gpt-4.1", label: "GPT-4.1" }
+  { id: "gpt-4o-mini", label: "GPT-4o Mini" },
+  { id: "gpt-4o", label: "GPT-4o" }
 ];
+
+const DEFAULT_TTS_VOICE = "alloy";
+const VOICES = [
+  { id: "alloy", label: "Alloy (neutral, clear)" },
+  { id: "verse", label: "Verse (warm, natural)" },
+  { id: "sage", label: "Sage (calm, low)" },
+  { id: "serene", label: "Serene (soft, breathy)" },
+  { id: "charlie", label: "Charlie (bright, energetic)" },
+  { id: "shimmer", label: "Shimmer (crisp, lively)" }
+];
+
 
 // --- OpenAI Function Schema (forces JSON) ---
 const EXAM_FUNCTION = {
@@ -329,12 +340,15 @@ function hashString(str) {
 // --- Main Container ---
 export default function ExamAIConverterContainer() {
   // --- Settings State ---
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState(DEFAULT_MODEL);
-  const [saveKey, setSaveKey] = useState(false);
-  const [settingsSaved, setSettingsSaved] = useState(false);
-  const [settingsBanner, setSettingsBanner] = useState(false);
+// --- Settings State ---
+const [settingsOpen, setSettingsOpen] = useState(false);
+const [apiKey, setApiKey] = useState("");
+const [model, setModel] = useState(DEFAULT_MODEL);
+const [ttsVoice, setTtsVoice] = useState(DEFAULT_TTS_VOICE);
+const [saveKey, setSaveKey] = useState(false);
+const [settingsSaved, setSettingsSaved] = useState(false);
+const [settingsBanner, setSettingsBanner] = useState(false);
+
 
   // --- Token Usage State ---
   const [tokenUsage, setTokenUsage] = useState({ session: 0, actions: [] });
@@ -373,31 +387,40 @@ export default function ExamAIConverterContainer() {
   const fileInputRef = useRef();
 
   // --- Load Settings on Mount ---
-  useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || "{}");
-    if (saved.apiKey) setApiKey(saved.apiKey);
-    if (saved.model) setModel(saved.model);
-    if (saved.saveKey) setSaveKey(true);
-    setSettingsSaved(!!saved.apiKey);
-    setSettingsBanner(true);
-    // Token usage
-    const tu = JSON.parse(localStorage.getItem(TOKEN_KEY) || "{}");
-    setTokenUsage(tu.session ? tu : { session: 0, actions: [] });
-    // History
-    const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-    setHistory(hist);
-  }, []);
+useEffect(() => {
+  const saved = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || "{}");
+  if (saved.apiKey) setApiKey(saved.apiKey);
+  if (saved.model) setModel(saved.model);
+  if (saved.ttsVoice) setTtsVoice(saved.ttsVoice);
+  if (saved.saveKey) setSaveKey(true);
+  setSettingsSaved(!!saved.apiKey);
+  setSettingsBanner(true);
+  // Token usage
+  const tu = JSON.parse(localStorage.getItem(TOKEN_KEY) || "{}");
+  setTokenUsage(tu.session ? tu : { session: 0, actions: [] });
+  // History
+  const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  setHistory(hist);
+}, []);
 
-  // --- Persist Settings ---
-  useEffect(() => {
-    if (saveKey) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ apiKey, model, saveKey }));
-      setSettingsSaved(true);
-    } else {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ model, saveKey }));
-      setSettingsSaved(false);
-    }
-  }, [apiKey, model, saveKey]);
+
+// --- Persist Settings ---
+useEffect(() => {
+  if (saveKey) {
+    localStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify({ apiKey, model, ttsVoice, saveKey })
+    );
+    setSettingsSaved(true);
+  } else {
+    localStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify({ model, ttsVoice, saveKey })
+    );
+    setSettingsSaved(false);
+  }
+}, [apiKey, model, ttsVoice, saveKey]);
+
 
   // --- Persist Token Usage ---
   useEffect(() => {
@@ -938,27 +961,39 @@ export default function ExamAIConverterContainer() {
     });
   };
 
-  // --- Settings Modal Handlers ---
-  const handleSaveSettings = () => {
-    if (saveKey) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ apiKey, model, saveKey }));
-      setSettingsSaved(true);
-    } else {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ model, saveKey }));
-      setSettingsSaved(false);
-    }
-    setSettingsOpen(false);
-  };
-  const handleDeleteKey = () => {
-    setApiKey("");
+// --- Settings Modal Handlers ---
+const handleSaveSettings = () => {
+  if (saveKey) {
+    localStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify({ apiKey, model, ttsVoice, saveKey })
+    );
+    setSettingsSaved(true);
+  } else {
+    localStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify({ model, ttsVoice, saveKey })
+    );
     setSettingsSaved(false);
-    setSaveKey(false);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ model, saveKey: false }));
-  };
-  const handleResetSession = () => {
-    setTokenUsage({ session: 0, actions: [] });
-    localStorage.setItem(TOKEN_KEY, JSON.stringify({ session: 0, actions: [] }));
-  };
+  }
+  setSettingsOpen(false);
+};
+
+const handleDeleteKey = () => {
+  setApiKey("");
+  setSettingsSaved(false);
+  setSaveKey(false);
+  localStorage.setItem(
+    LOCAL_STORAGE_KEY,
+    JSON.stringify({ model, ttsVoice, saveKey: false })
+  );
+};
+
+const handleResetSession = () => {
+  setTokenUsage({ session: 0, actions: [] });
+  localStorage.setItem(TOKEN_KEY, JSON.stringify({ session: 0, actions: [] }));
+};
+
 
   // --- UI ---
   return (
@@ -1267,12 +1302,14 @@ export default function ExamAIConverterContainer() {
         )}
       </main>
 
-      {/* Floating AI Voice Tutor */}
-      <VoiceTutor
-        apiKey={apiKey}
-        model={model}
-        examJSON={examJSON}
-      />
+{/* Floating AI Voice Tutor */}
+<VoiceTutor
+  apiKey={apiKey}
+  model={model}
+  examJSON={examJSON}
+  ttsVoice={ttsVoice}
+/>
+
     </div>
   );
 }
@@ -2251,7 +2288,7 @@ function HistoryTab({ history }) {
 }
 
 // --- Voice Tutor (Floating Mic) ---
-function VoiceTutor({ apiKey, model, examJSON }) {
+function VoiceTutor({ apiKey, model, examJSON, ttsVoice }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -2301,8 +2338,8 @@ function VoiceTutor({ apiKey, model, examJSON }) {
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini-tts",   // OpenAI’s lightweight TTS
-        voice: "alloy",             // try alloy, verse, sage
+        model: "gpt-4o-mini-tts",
+        voice: ttsVoice || DEFAULT_TTS_VOICE,
         input: text
       })
     });
