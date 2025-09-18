@@ -2289,29 +2289,56 @@ function VoiceTutor({ apiKey, model, examJSON }) {
     };
   }, [hasTTS]);
 
-  const speak = (text) => {
-    if (!hasTTS || muted || !text) return;
-    try {
-      window.speechSynthesis.cancel(); // stop anything queued
-      const u = new SpeechSynthesisUtterance(text);
-      // Pick a reasonable voice (optional); default works across browsers
-      u.rate = 1.0;
-      u.pitch = 1.0;
-      u.onstart = () => setSpeaking(true);
-      u.onend = () => setSpeaking(false);
-      ttsUtteranceRef.current = u;
-      window.speechSynthesis.speak(u);
-    } catch (e) {
-      setError("Speech synthesis failed.");
-      setSpeaking(false);
-    }
-  };
+  const speak = async (text) => {
+  if (!text || muted) return;
+  try {
+    setSpeaking(true);
 
-  const stopSpeaking = () => {
-    if (!hasTTS) return;
-    window.speechSynthesis.cancel();
+    const res = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini-tts",   // OpenAI’s lightweight TTS
+        voice: "alloy",             // try alloy, verse, sage
+        input: text
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || "TTS request failed");
+    }
+
+    const audioBlob = await res.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+
+    const audio = new Audio(audioUrl);
+    audio.onended = () => setSpeaking(false);
+    audio.onerror = () => {
+      setError("Failed to play audio");
+      setSpeaking(false);
+    };
+    audio.play();
+
+  } catch (e) {
+    setError("TTS error: " + (e.message || "unknown"));
     setSpeaking(false);
-  };
+  }
+};
+
+
+const stopSpeaking = () => {
+  setSpeaking(false);
+  if (typeof window !== "undefined") {
+    try {
+      window.speechSynthesis.cancel(); // in case old fallback triggered
+    } catch {}
+  }
+};
+
 
   const stopListening = () => {
     stopRequestedRef.current = true;
