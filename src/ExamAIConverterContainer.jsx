@@ -1,7 +1,48 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  Upload, FileText, Image, Check, X, HelpCircle, AlertTriangle, RefreshCw, Award, Brain, BookOpen, Clock, Zap, CheckCircle, XCircle, Sparkles, BarChart, PenTool, Eye, Lightbulb, Calculator, MessageCircle, Search, ExternalLink, Bookmark, Settings, Info, RotateCcw, Layers, List, Maximize, Minimize, ChevronRight, ChevronLeft, Coffee, Compass,
-  Mic, MicOff, Volume2, VolumeX, StopCircle, Play, Pause
+  Upload,
+  FileText,
+  Image,
+  Check,
+  X,
+  HelpCircle,
+  AlertTriangle,
+  RefreshCw,
+  Award,
+  Brain,
+  BookOpen,
+  Clock,
+  Zap,
+  CheckCircle,
+  XCircle,
+  Sparkles,
+  BarChart,
+  PenTool,
+  Eye,
+  Lightbulb,
+  Calculator,
+  MessageCircle,
+  Search,
+  ExternalLink,
+  Bookmark,
+  Settings,
+  Info,
+  RotateCcw,
+  Layers,
+  List,
+  Maximize,
+  Minimize,
+  ChevronRight,
+  ChevronLeft,
+  Coffee,
+  Compass,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  StopCircle,
+  Play,
+  Pause
 } from "lucide-react";
 import Tesseract from "tesseract.js";
 
@@ -26,7 +67,6 @@ const VOICES = [
   { id: "shimmer", label: "Shimmer (crisp, lively)" }
 ];
 
-
 // --- OpenAI Function Schema (forces JSON) ---
 const EXAM_FUNCTION = {
   type: "function",
@@ -36,8 +76,11 @@ const EXAM_FUNCTION = {
     parameters: {
       type: "object",
       properties: {
-        title: { type: ["string","null"] },
-        suggestedTime: { type: ["integer", "null"], description: "Suggested total time for the exam in seconds." },
+        title: { type: ["string", "null"] },
+        suggestedTime: {
+          type: ["integer", "null"],
+          description: "Suggested total time for the exam in seconds."
+        },
         multipleChoice: {
           type: "array",
           items: {
@@ -47,7 +90,7 @@ const EXAM_FUNCTION = {
               type: { type: "string", enum: ["radio"] },
               text: { type: "string" },
               options: { type: "array", items: { type: "string" } },
-              correctAnswer: { type: ["string","null"] },
+              correctAnswer: { type: ["string", "null"] },
               points: { type: "integer" },
               hint: {
                 oneOf: [
@@ -62,9 +105,9 @@ const EXAM_FUNCTION = {
                   }
                 ]
               },
-              sampleAnswer: { type: ["string","null"] }
+              sampleAnswer: { type: ["string", "null"] }
             },
-            required: ["type","text","options"]
+            required: ["type", "text", "options"]
           }
         },
         trueFalse: {
@@ -76,7 +119,7 @@ const EXAM_FUNCTION = {
               type: { type: "string", enum: ["radio"] },
               text: { type: "string" },
               options: { type: "array", items: { type: "string" } },
-              correctAnswer: { type: ["string","null"] },
+              correctAnswer: { type: ["string", "null"] },
               points: { type: "integer" },
               hint: {
                 oneOf: [
@@ -92,7 +135,7 @@ const EXAM_FUNCTION = {
                 ]
               }
             },
-            required: ["type","text","options"]
+            required: ["type", "text", "options"]
           }
         },
         checkbox: {
@@ -104,7 +147,10 @@ const EXAM_FUNCTION = {
               type: { type: "string", enum: ["checkbox"] },
               text: { type: "string" },
               options: { type: "array", items: { type: "string" } },
-              correctAnswers: { type: ["array","null"], items: { type: "string" } },
+              correctAnswers: {
+                type: ["array", "null"],
+                items: { type: "string" }
+              },
               points: { type: "integer" },
               hint: {
                 oneOf: [
@@ -120,7 +166,7 @@ const EXAM_FUNCTION = {
                 ]
               }
             },
-            required: ["type","text","options"]
+            required: ["type", "text", "options"]
           }
         },
         shortAnswer: {
@@ -145,9 +191,9 @@ const EXAM_FUNCTION = {
                   }
                 ]
               },
-              sampleAnswer: { type: ["string","null"] }
+              sampleAnswer: { type: ["string", "null"] }
             },
-            required: ["type","text"]
+            required: ["type", "text"]
           }
         }
       },
@@ -181,16 +227,18 @@ async function callOpenAI({
     max_tokens
   };
 
-  // Prefer function-calling for strict JSON
   if (Array.isArray(tools) && tools.length > 0) {
     payload.tools = tools;
-    if (tool_choice) payload.tool_choice = tool_choice; // force the function
+    if (tool_choice) payload.tool_choice = tool_choice;
   } else if (forceJson) {
-    // Fallback JSON mode for models that support it
     payload.response_format = { type: "json_object" };
   }
 
-  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload)
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error?.message || "OpenAI API error");
@@ -201,36 +249,39 @@ async function callOpenAI({
 
 // --- Helper: Token Estimation ---
 function estimateTokens(str) {
-  // Rough estimate: 1 token ≈ 4 chars English
   return Math.ceil(str.length / 4);
 }
 
-/// --- Helper: Robust LLM JSON Parse ---
+// --- Helper: Robust LLM JSON Parse ---
 function robustLLMJsonParse(response) {
-  // If it's an OpenAI object, extract message.content first
   if (typeof response === "object" && response !== null) {
     if (response?.choices?.[0]?.message?.content) {
       response = response.choices[0].message.content;
     } else if (response?.content) {
       response = response.content;
     } else {
-      try { return JSON.parse(JSON.stringify(response)); } catch { /* fall through */ }
+      try {
+        return JSON.parse(JSON.stringify(response));
+      } catch {
+        /* ignore */
+      }
     }
   }
 
   if (typeof response !== "string") response = String(response ?? "");
 
-  // Strip ```json ...``` fences
   response = response.replace(/```(?:json|JSON)?\s*([\s\S]*?)\s*```/g, "$1");
-
-  // Strip BOM + curly quotes
   response = response.replace(/\uFEFF/g, "");
-  response = response.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+  response = response
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"');
 
-  // Fast path
-  try { return JSON.parse(response); } catch {}
+  try {
+    return JSON.parse(response);
+  } catch {
+    /* continue */
+  }
 
-  // Find the largest balanced {...} or [...] substring
   const extractBalanced = (str, open, close) => {
     const opens = [];
     let best = null;
@@ -244,15 +295,22 @@ function robustLLMJsonParse(response) {
     return best ? str.slice(best.start, best.end + 1) : null;
   };
 
-  let jsonStr = extractBalanced(response, "{", "}") || extractBalanced(response, "[", "]");
+  let jsonStr =
+    extractBalanced(response, "{", "}") ||
+    extractBalanced(response, "[", "]");
   if (!jsonStr) throw new Error("Could not find JSON in model response.");
 
-  // Sanitize
-  jsonStr = jsonStr.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "");            // comments
-  jsonStr = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");    // control chars
+  jsonStr = jsonStr.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "");
+  jsonStr = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
   let prev;
-  do { prev = jsonStr; jsonStr = jsonStr.replace(/,\s*([\]}])/g, "$1"); } while (jsonStr !== prev); // trailing commas
-  do { prev = jsonStr; jsonStr = jsonStr.replace(/,,+/g, ","); } while (jsonStr !== prev);          // duplicate commas
+  do {
+    prev = jsonStr;
+    jsonStr = jsonStr.replace(/,\s*([\]}])/g, "$1");
+  } while (jsonStr !== prev);
+  do {
+    prev = jsonStr;
+    jsonStr = jsonStr.replace(/,,+/g, ",");
+  } while (jsonStr !== prev);
 
   return JSON.parse(jsonStr);
 }
@@ -261,22 +319,25 @@ function robustLLMJsonParse(response) {
 function extractExamFromResponse(data) {
   const choice = data?.choices?.[0]?.message;
 
-  // Prefer function-calling (tool_calls) if present
   if (choice?.tool_calls?.length) {
     const argsStr = choice.tool_calls[0]?.function?.arguments || "{}";
     const parsed = robustLLMJsonParse(argsStr);
     return normalizeExamStructure(parsed);
   }
 
-  // Otherwise parse content
   const content = choice?.content ?? data;
   const parsed = robustLLMJsonParse(content);
   return normalizeExamStructure(parsed);
 }
 
-// Normalize to: { multipleChoice:[], trueFalse:[], checkbox:[], shortAnswer:[], suggestedTime }
+// Normalize to consistent structure
 function normalizeExamStructure(parsed) {
-  const exam = { multipleChoice: [], trueFalse: [], checkbox: [], shortAnswer: [] };
+  const exam = {
+    multipleChoice: [],
+    trueFalse: [],
+    checkbox: [],
+    shortAnswer: []
+  };
 
   if (parsed && parsed.suggestedTime) {
     exam.suggestedTime = parsed.suggestedTime;
@@ -286,7 +347,6 @@ function normalizeExamStructure(parsed) {
     if (!q) return;
     if (!q.id) q.id = "q_" + Math.random().toString(36).slice(2, 10);
 
-    // Normalize hint: if it's a string, try to parse as JSON for {explanation, answer}
     if (q.hint && typeof q.hint === "string") {
       try {
         const hintObj = JSON.parse(q.hint);
@@ -294,18 +354,28 @@ function normalizeExamStructure(parsed) {
           q.hint = hintObj;
         }
       } catch {
-        // If not JSON, treat as explanation only
         q.hint = { explanation: q.hint };
       }
     }
 
     if (q.type === "radio") {
-      const isTF = Array.isArray(q.options) && q.options.length === 2 &&
-        q.options.every((opt) => ["true","false","True","False","TRUE","FALSE"].includes(String(opt)));
-      if (isTF) exam.trueFalse.push(q); else exam.multipleChoice.push(q);
+      const isTF =
+        Array.isArray(q.options) &&
+        q.options.length === 2 &&
+        q.options.every((opt) =>
+          ["true", "false", "True", "False", "TRUE", "FALSE"].includes(
+            String(opt)
+          )
+        );
+      if (isTF) exam.trueFalse.push(q);
+      else exam.multipleChoice.push(q);
     } else if (q.type === "checkbox") {
       exam.checkbox.push(q);
-    } else if (q.type === "text" || q.type === "short" || q.type === "shortAnswer") {
+    } else if (
+      q.type === "text" ||
+      q.type === "short" ||
+      q.type === "shortAnswer"
+    ) {
       q.type = "text";
       exam.shortAnswer.push(q);
     }
@@ -313,7 +383,13 @@ function normalizeExamStructure(parsed) {
 
   if (Array.isArray(parsed)) {
     parsed.forEach(put);
-  } else if (parsed && (parsed.multipleChoice || parsed.trueFalse || parsed.checkbox || parsed.shortAnswer)) {
+  } else if (
+    parsed &&
+    (parsed.multipleChoice ||
+      parsed.trueFalse ||
+      parsed.checkbox ||
+      parsed.shortAnswer)
+  ) {
     (parsed.multipleChoice || []).forEach(put);
     (parsed.trueFalse || []).forEach(put);
     (parsed.checkbox || []).forEach(put);
@@ -327,11 +403,13 @@ function normalizeExamStructure(parsed) {
 
 // --- Helper: Hash ---
 function hashString(str) {
-  let hash = 0, i, chr;
+  let hash = 0,
+    i,
+    chr;
   if (str.length === 0) return hash.toString();
   for (i = 0; i < str.length; i++) {
     chr = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + chr;
+    hash = (hash << 5) - hash + chr;
     hash |= 0;
   }
   return Math.abs(hash).toString();
@@ -366,15 +444,16 @@ export default function ExamAIConverterContainer() {
 
   // --- Adaptive Practice State ---
   const [practiceMode, setPracticeMode] = useState(false);
-  const [practiceQuestions, setPracticeQuestions] = useState([]); // [{question, type, sourceExam}]
+  const [practiceQuestions, setPracticeQuestions] = useState([]);
   const [currentPracticeIndex, setCurrentPracticeIndex] = useState(0);
   const [practiceAnswer, setPracticeAnswer] = useState("");
   const [practiceFeedback, setPracticeFeedback] = useState(null);
   const [practiceOptions, setPracticeOptions] = useState({
-    type: "any", // "any", "multipleChoice", "shortAnswer", etc.
+    type: "any",
     difficulty: "any"
   });
-  // --- Practice History State ---
+
+  // --- Practice History ---
   const [practiceHistory, setPracticeHistory] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("practiceHistory") || "[]");
@@ -384,7 +463,7 @@ export default function ExamAIConverterContainer() {
   });
 
   // --- Timer/Progress State ---
-  const [timer, setTimer] = useState(60 * 60); // seconds
+  const [timer, setTimer] = useState(60 * 60);
   const [timerActive, setTimerActive] = useState(false);
   const [timerEnabled, setTimerEnabled] = useState(true);
   const [aiSuggestedTime, setAiSuggestedTime] = useState(null);
@@ -402,40 +481,38 @@ export default function ExamAIConverterContainer() {
   const fileInputRef = useRef();
 
   // --- Load Settings on Mount ---
-useEffect(() => {
-  const saved = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || "{}");
-  if (saved.apiKey) setApiKey(saved.apiKey);
-  if (saved.model) setModel(saved.model);
-  if (saved.ttsVoice) setTtsVoice(saved.ttsVoice);
-  if (saved.saveKey) setSaveKey(true);
-  setSettingsSaved(!!saved.apiKey);
-  setSettingsBanner(true);
-  // Token usage
-  const tu = JSON.parse(localStorage.getItem(TOKEN_KEY) || "{}");
-  setTokenUsage(tu.session ? tu : { session: 0, actions: [] });
-  // History
-  const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-  setHistory(hist);
-}, []);
+  useEffect(() => {
+    const saved = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || "{}");
+    if (saved.apiKey) setApiKey(saved.apiKey);
+    if (saved.model) setModel(saved.model);
+    if (saved.ttsVoice) setTtsVoice(saved.ttsVoice);
+    if (saved.saveKey) setSaveKey(true);
+    setSettingsSaved(!!saved.apiKey);
+    setSettingsBanner(true);
 
+    const tu = JSON.parse(localStorage.getItem(TOKEN_KEY) || "{}");
+    setTokenUsage(tu.session ? tu : { session: 0, actions: [] });
 
-// --- Persist Settings ---
-useEffect(() => {
-  if (saveKey) {
-    localStorage.setItem(
-      LOCAL_STORAGE_KEY,
-      JSON.stringify({ apiKey, model, ttsVoice, saveKey })
-    );
-    setSettingsSaved(true);
-  } else {
-    localStorage.setItem(
-      LOCAL_STORAGE_KEY,
-      JSON.stringify({ model, ttsVoice, saveKey: false })
-    );
-    setSettingsSaved(false);
-  }
-}, [apiKey, model, ttsVoice, saveKey]);
+    const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    setHistory(hist);
+  }, []);
 
+  // --- Persist Settings ---
+  useEffect(() => {
+    if (saveKey) {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY,
+        JSON.stringify({ apiKey, model, ttsVoice, saveKey })
+      );
+      setSettingsSaved(true);
+    } else {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY,
+        JSON.stringify({ model, ttsVoice, saveKey: false })
+      );
+      setSettingsSaved(false);
+    }
+  }, [apiKey, model, ttsVoice, saveKey]);
 
   // --- Persist Token Usage ---
   useEffect(() => {
@@ -455,13 +532,17 @@ useEffect(() => {
       ocrText,
       rawText
     };
-    localStorage.setItem(SESSION_KEY_PREFIX + hash, JSON.stringify(sessionData));
-  }, [examJSON, answers, timer, ocrText, rawText]);
+    localStorage.setItem(
+      SESSION_KEY_PREFIX + hash,
+      JSON.stringify(sessionData)
+    );
+  }, [examJSON, answers, timer, ocrText, rawText, sessionHash]);
 
   // --- Restore Session on Mount ---
   useEffect(() => {
-    // Find latest session
-    const keys = Object.keys(localStorage).filter(k => k.startsWith(SESSION_KEY_PREFIX));
+    const keys = Object.keys(localStorage).filter((k) =>
+      k.startsWith(SESSION_KEY_PREFIX)
+    );
     if (keys.length > 0) {
       const latest = keys.sort().reverse()[0];
       const session = JSON.parse(localStorage.getItem(latest));
@@ -481,7 +562,7 @@ useEffect(() => {
   useEffect(() => {
     if (!timerActive || !timerEnabled) return;
     timerRef.current = setInterval(() => {
-      setTimer(prev => {
+      setTimer((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
           handleAutoSubmit();
@@ -491,7 +572,6 @@ useEffect(() => {
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
-    // eslint-disable-next-line
   }, [timerActive, timerEnabled]);
 
   // --- Progress Calculation ---
@@ -503,16 +583,23 @@ useEffect(() => {
         ...(examJSON.shortAnswer || [])
       ].length
     : 0;
+
   const answeredCount = examJSON
     ? [
         ...(examJSON.multipleChoice || []),
         ...(examJSON.trueFalse || []),
         ...(examJSON.checkbox || []),
         ...(examJSON.shortAnswer || [])
-      ].filter(q => {
-        if (q.type === "radio") return answers[q.id] !== undefined && answers[q.id] !== "";
-        if (q.type === "checkbox") return answers[q.id] && Object.values(answers[q.id]).some(Boolean);
-        if (q.type === "text") return answers[q.id] && answers[q.id].trim().length > 0;
+      ].filter((q) => {
+        if (q.type === "radio")
+          return answers[q.id] !== undefined && answers[q.id] !== "";
+        if (q.type === "checkbox")
+          return (
+            answers[q.id] &&
+            Object.values(answers[q.id]).some((val) => Boolean(val))
+          );
+        if (q.type === "text")
+          return answers[q.id] && answers[q.id].trim().length > 0;
         return false;
       }).length
     : 0;
@@ -559,7 +646,7 @@ useEffect(() => {
     setError("");
 
     const text = uploadType === "image" ? ocrText : rawText;
-    if (!text.trim()) {
+    if (!text || !text.trim()) {
       setError("No exam text to process.");
       setIsProcessing(false);
       return;
@@ -578,7 +665,9 @@ useEffect(() => {
         { role: "user", content: text }
       ];
 
-      const tokensPrompt = estimateTokens(prompt.map(m => m.content).join("\n"));
+      const tokensPrompt = estimateTokens(
+        prompt.map((m) => m.content).join("\n")
+      );
 
       const data = await callOpenAI({
         apiKey,
@@ -587,27 +676,27 @@ useEffect(() => {
         temperature: 0.2,
         max_tokens: 11000,
         tools: [EXAM_FUNCTION],
-        tool_choice: { type: "function", function: { name: "return_exam" } } // force structured output
+        tool_choice: { type: "function", function: { name: "return_exam" } }
       });
 
-      // Defensive: handle truncated/partial JSON from OpenAI
       let exam;
       try {
         exam = extractExamFromResponse(data);
-      } catch (e) {
-        // Try to recover from partial/truncated JSON in tool_calls
-        const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+      } catch {
+        const toolCall =
+          data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
         if (toolCall && typeof toolCall === "string") {
-          // Try to find the largest valid JSON substring
           let jsonStr = toolCall;
-          // Try to close the last array/object if truncated
           if (jsonStr.lastIndexOf("]") < jsonStr.lastIndexOf("[")) jsonStr += "]";
-          if (jsonStr.lastIndexOf("}") < jsonStr.lastIndexOf("{")) jsonStr += "}";
+          if (jsonStr.lastIndexOf("}") < jsonStr.lastIndexOf("{"))
+            jsonStr += "}";
           try {
             exam = robustLLMJsonParse(jsonStr);
             exam = normalizeExamStructure(exam);
-          } catch (e2) {
-            setError("Exam data was truncated or incomplete. Please try again or reduce exam length.");
+          } catch {
+            setError(
+              "Exam data was truncated or incomplete. Try again or reduce exam length."
+            );
             setIsProcessing(false);
             return;
           }
@@ -617,23 +706,30 @@ useEffect(() => {
           return;
         }
       }
+
       const tokensResponse = estimateTokens(JSON.stringify(exam));
 
       // AI suggested time
       let suggestedTime = 60 * 60;
-      if (data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments) {
+      if (
+        data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments
+      ) {
         try {
-          const args = robustLLMJsonParse(data.choices[0].message.tool_calls[0].function.arguments);
+          const args = robustLLMJsonParse(
+            data.choices[0].message.tool_calls[0].function.arguments
+          );
           if (args.suggestedTime && Number.isInteger(args.suggestedTime)) {
             suggestedTime = args.suggestedTime;
           }
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       } else if (exam.suggestedTime && Number.isInteger(exam.suggestedTime)) {
         suggestedTime = exam.suggestedTime;
       }
       setAiSuggestedTime(suggestedTime);
 
-      setTokenUsage(prev => ({
+      setTokenUsage((prev) => ({
         session: prev.session + tokensPrompt + tokensResponse,
         actions: [
           ...prev.actions,
@@ -655,25 +751,37 @@ useEffect(() => {
       setTimerEnabled(true);
       setTimer(suggestedTime);
       setTimerActive(true);
-      setSessionHash(hashString(JSON.stringify(exam)));
+      const hash = hashString(JSON.stringify(exam));
+      setSessionHash(hash);
 
-      // --- Adaptive Practice Mode: Extract single questions for practice ---
-      // Gather all questions from this and similar exams in history
+      // --- Adaptive Practice Mode: build pool from this + past exams ---
       const allQuestions = [];
-      // Current exam
-      ["multipleChoice", "trueFalse", "checkbox", "shortAnswer"].forEach(type => {
-        (exam[type] || []).forEach(q => allQuestions.push({ ...q, type, sourceExam: exam }));
-      });
-      // Similar exams from history (if any)
+
+      ["multipleChoice", "trueFalse", "checkbox", "shortAnswer"].forEach(
+        (typeKey) => {
+          (exam[typeKey] || []).forEach((q) =>
+            allQuestions.push({ ...q, type: typeKey, sourceExam: exam })
+          );
+        }
+      );
+
       const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-      hist.forEach(h => {
+      hist.forEach((h) => {
         if (h.examJSON) {
-          ["multipleChoice", "trueFalse", "checkbox", "shortAnswer"].forEach(type => {
-            (h.examJSON[type] || []).forEach(q => allQuestions.push({ ...q, type, sourceExam: h.examJSON }));
-          });
+          ["multipleChoice", "trueFalse", "checkbox", "shortAnswer"].forEach(
+            (typeKey) => {
+              (h.examJSON[typeKey] || []).forEach((q) =>
+                allQuestions.push({
+                  ...q,
+                  type: typeKey,
+                  sourceExam: h.examJSON
+                })
+              );
+            }
+          );
         }
       });
-      // Shuffle and pick one for practice
+
       if (allQuestions.length > 0) {
         const shuffled = allQuestions.sort(() => Math.random() - 0.5);
         setPracticeQuestions(shuffled);
@@ -681,6 +789,8 @@ useEffect(() => {
         setPracticeMode(true);
         setPracticeAnswer("");
         setPracticeFeedback(null);
+      } else {
+        setPracticeMode(false);
       }
     } catch (e) {
       setError(e.message || "Failed to process exam.");
@@ -698,7 +808,7 @@ useEffect(() => {
       setIsProcessing(false);
       return;
     }
-    // Grading logic
+
     let score = {
       total: 0,
       earned: 0,
@@ -708,6 +818,7 @@ useEffect(() => {
       shortAnswer: { total: 0, earned: 0 }
     };
     let feedback = {};
+
     // Multiple Choice
     for (const q of examJSON.multipleChoice || []) {
       score.multipleChoice.total += q.points || 1;
@@ -717,6 +828,7 @@ useEffect(() => {
         score.earned += q.points || 1;
       }
     }
+
     // True/False
     for (const q of examJSON.trueFalse || []) {
       score.trueFalse.total += q.points || 1;
@@ -726,31 +838,41 @@ useEffect(() => {
         score.earned += q.points || 1;
       }
     }
+
     // Checkbox
     for (const q of examJSON.checkbox || []) {
       score.checkbox.total += q.points || 1;
       score.total += q.points || 1;
       if (q.correctAnswers && Array.isArray(q.correctAnswers)) {
         const correctSet = new Set(q.correctAnswers);
-        const selected = answers[q.id] ? Object.entries(answers[q.id]).filter(([k, v]) => v).map(([k]) => k) : [];
-        const numCorrect = selected.filter(opt => correctSet.has(opt)).length;
-        const numIncorrect = selected.filter(opt => !correctSet.has(opt)).length;
-        const partial = Math.max(0, (numCorrect - numIncorrect) / correctSet.size);
+        const selected = answers[q.id]
+          ? Object.entries(answers[q.id])
+              .filter(([, v]) => v)
+              .map(([k]) => k)
+          : [];
+        const numCorrect = selected.filter((opt) => correctSet.has(opt)).length;
+        const numIncorrect = selected.filter((opt) => !correctSet.has(opt))
+          .length;
+        const partial = Math.max(
+          0,
+          (numCorrect - numIncorrect) / correctSet.size
+        );
         const pts = Math.round((q.points || 1) * partial);
         score.checkbox.earned += pts;
         score.earned += pts;
       }
     }
+
     // Short Answer
     for (const q of examJSON.shortAnswer || []) {
       score.shortAnswer.total += q.points || 1;
       score.total += q.points || 1;
-      // If correctAnswer/sampleAnswer present, grade locally
+
       if (q.sampleAnswer) {
-        // Simple: if answer matches sampleAnswer (case-insensitive, trimmed), full points
         if (
           answers[q.id] &&
-          answers[q.id].trim().toLowerCase() === q.sampleAnswer.trim().toLowerCase()
+          answers[q.id].trim().toLowerCase() ===
+            q.sampleAnswer.trim().toLowerCase()
         ) {
           score.shortAnswer.earned += q.points || 1;
           score.earned += q.points || 1;
@@ -760,20 +882,27 @@ useEffect(() => {
             maxScore: q.points || 1
           };
         } else {
-          // Otherwise, use LLM for grading
           try {
             const prompt = [
               {
                 role: "system",
                 content:
-                  "You are an expert grader. Given a question, a student's answer, and a sample answer, grade the student's answer out of the given points. Return JSON: { \"score\": <int>, \"feedback\": \"<1–2 sentences>\" }. Score must not exceed points. Justify against key points in the sample answer."
+                  "You are an expert grader. Given a question, a student's answer, and a sample answer, grade the student's answer out of the given points. " +
+                  'Return JSON: { "score": <int>, "feedback": "<1–2 sentences>" }. Score must not exceed points. ' +
+                  "Justify against key points in the sample answer."
               },
               {
                 role: "user",
-                content: `Question: ${q.text}\nPoints: ${q.points}\nSample Answer: ${q.sampleAnswer}\nStudent Answer: ${answers[q.id]}`
+                content: `Question: ${q.text}\nPoints: ${
+                  q.points
+                }\nSample Answer: ${
+                  q.sampleAnswer
+                }\nStudent Answer: ${answers[q.id] || ""}`
               }
             ];
-            const tokensPrompt = estimateTokens(prompt.map(m => m.content).join("\n"));
+            const tokensPrompt = estimateTokens(
+              prompt.map((m) => m.content).join("\n")
+            );
             const data = await callOpenAI({
               apiKey,
               model,
@@ -782,14 +911,17 @@ useEffect(() => {
               max_tokens: 256
             });
             const responseContent = data.choices[0].message.content;
-            const response = typeof responseContent === "string" ? responseContent.trim() : "";
+            const response =
+              typeof responseContent === "string"
+                ? responseContent.trim()
+                : "";
             const tokensResponse = estimateTokens(response);
-            setTokenUsage(prev => ({
+            setTokenUsage((prev) => ({
               session: prev.session + tokensPrompt + tokensResponse,
               actions: [
                 ...prev.actions,
                 {
-                  type: "processExam",
+                  type: "gradeShortAnswer",
                   tokens: tokensPrompt + tokensResponse,
                   prompt: tokensPrompt,
                   response: tokensResponse,
@@ -797,16 +929,21 @@ useEffect(() => {
                 }
               ]
             }));
-            // Parse JSON
             let parsed;
             try {
               parsed = robustLLMJsonParse(response);
-            } catch (e) {
-              setError("Failed to parse generated exam JSON. Please try again.");
-              setIsProcessing(false);
-              return;
+            } catch {
+              feedback[q.id] = {
+                score: 0,
+                feedback: "Could not grade answer (invalid model response).",
+                maxScore: q.points || 1
+              };
+              continue;
             }
-            const pts = Math.min(q.points || 1, Math.max(0, parsed.score));
+            const pts = Math.min(
+              q.points || 1,
+              Math.max(0, parsed.score ?? 0)
+            );
             score.shortAnswer.earned += pts;
             score.earned += pts;
             feedback[q.id] = {
@@ -814,7 +951,7 @@ useEffect(() => {
               feedback: parsed.feedback,
               maxScore: q.points || 1
             };
-          } catch (e) {
+          } catch {
             feedback[q.id] = {
               score: 0,
               feedback: "Could not grade answer (API error).",
@@ -823,20 +960,24 @@ useEffect(() => {
           }
         }
       } else {
-        // No sampleAnswer: ask LLM to extract key points and grade
         try {
           const prompt = [
             {
               role: "system",
               content:
-                "You are an expert grader. Given a question, a student's answer, and the number of points, extract key points from the question and grade the student's answer out of the given points. Return JSON: { \"score\": <int>, \"feedback\": \"<1–2 sentences>\" }. Score must not exceed points. Justify against key points."
+                "You are an expert grader. Given a question, a student's answer, and the number of points, extract key points from the question and grade the student's answer out of the given points. " +
+                'Return JSON: { "score": <int>, "feedback": "<1–2 sentences>" }. Score must not exceed points.'
             },
             {
               role: "user",
-              content: `Question: ${q.text}\nPoints: ${q.points}\nStudent Answer: ${answers[q.id]}`
+              content: `Question: ${q.text}\nPoints: ${
+                q.points
+              }\nStudent Answer: ${answers[q.id] || ""}`
             }
           ];
-          const tokensPrompt = estimateTokens(prompt.map(m => m.content).join("\n"));
+          const tokensPrompt = estimateTokens(
+            prompt.map((m) => m.content).join("\n")
+          );
           const data = await callOpenAI({
             apiKey,
             model,
@@ -846,7 +987,7 @@ useEffect(() => {
           });
           const response = data.choices[0].message.content.trim();
           const tokensResponse = estimateTokens(response);
-          setTokenUsage(prev => ({
+          setTokenUsage((prev) => ({
             session: prev.session + tokensPrompt + tokensResponse,
             actions: [
               ...prev.actions,
@@ -862,15 +1003,18 @@ useEffect(() => {
           let parsed;
           try {
             parsed = robustLLMJsonParse(response);
-          } catch (e) {
+          } catch {
             feedback[q.id] = {
               score: 0,
               feedback: "Could not grade answer (invalid model response).",
               maxScore: q.points || 1
             };
-            // No continue; just let the loop proceed
+            continue;
           }
-          const pts = Math.min(q.points || 1, Math.max(0, parsed.score));
+          const pts = Math.min(
+            q.points || 1,
+            Math.max(0, parsed.score ?? 0)
+          );
           score.shortAnswer.earned += pts;
           score.earned += pts;
           feedback[q.id] = {
@@ -878,7 +1022,7 @@ useEffect(() => {
             feedback: parsed.feedback,
             maxScore: q.points || 1
           };
-        } catch (e) {
+        } catch {
           feedback[q.id] = {
             score: 0,
             feedback: "Could not grade answer (API error).",
@@ -887,20 +1031,23 @@ useEffect(() => {
         }
       }
     }
+
     setExamScore(score);
     setTextAnswersFeedback(feedback);
     setExamCompleted(true);
     setTimerActive(false);
 
-    // Save to history
+    // Save to history INCLUDING examJSON so we can pull "similar exams" later
     const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
     hist.push({
       timestamp: Date.now(),
       subject: examJSON.title || "Exam",
-      scoreBreakdown: score
+      scoreBreakdown: score,
+      examJSON
     });
     setHistory(hist);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
+
     setIsProcessing(false);
   };
 
@@ -938,7 +1085,9 @@ useEffect(() => {
         ];
       }
 
-      const tokensPrompt = estimateTokens(prompt.map(m => m.content).join("\n"));
+      const tokensPrompt = estimateTokens(
+        prompt.map((m) => m.content).join("\n")
+      );
 
       const data = await callOpenAI({
         apiKey,
@@ -953,7 +1102,7 @@ useEffect(() => {
       const exam = extractExamFromResponse(data);
       const tokensResponse = estimateTokens(JSON.stringify(exam));
 
-      setTokenUsage(prev => ({
+      setTokenUsage((prev) => ({
         session: prev.session + tokensPrompt + tokensResponse,
         actions: [
           ...prev.actions,
@@ -984,7 +1133,7 @@ useEffect(() => {
 
   // --- Answer Change Handler ---
   const handleAnswerChange = (questionId, value, isCheckbox = false) => {
-    setAnswers(prev => {
+    setAnswers((prev) => {
       if (isCheckbox) {
         return {
           ...prev,
@@ -1002,41 +1151,46 @@ useEffect(() => {
     });
   };
 
-// --- Settings Modal Handlers ---
-const handleSaveSettings = () => {
-  if (saveKey) {
-    localStorage.setItem(
-      LOCAL_STORAGE_KEY,
-      JSON.stringify({ apiKey, model, ttsVoice, saveKey })
-    );
-    setSettingsSaved(true);
-  } else {
+  // --- Settings Modal Handlers ---
+  const handleSaveSettings = () => {
+    if (saveKey) {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY,
+        JSON.stringify({ apiKey, model, ttsVoice, saveKey })
+      );
+      setSettingsSaved(true);
+    } else {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY,
+        JSON.stringify({ model, ttsVoice, saveKey: false })
+      );
+      setSettingsSaved(false);
+    }
+    setSettingsOpen(false);
+  };
+
+  const handleDeleteKey = () => {
+    setApiKey("");
+    setSettingsSaved(false);
+    setSaveKey(false);
     localStorage.setItem(
       LOCAL_STORAGE_KEY,
       JSON.stringify({ model, ttsVoice, saveKey: false })
     );
-    setSettingsSaved(false);
-  }
-  setSettingsOpen(false);
-};
+  };
 
-const handleDeleteKey = () => {
-  setApiKey("");
-  setSettingsSaved(false);
-  setSaveKey(false);
-  localStorage.setItem(
-    LOCAL_STORAGE_KEY,
-    JSON.stringify({ model, ttsVoice, saveKey: false })
-  );
-};
+  const handleResetSession = () => {
+    setTokenUsage({ session: 0, actions: [] });
+    localStorage.setItem(
+      TOKEN_KEY,
+      JSON.stringify({ session: 0, actions: [] })
+    );
+  };
 
-const handleResetSession = () => {
-  setTokenUsage({ session: 0, actions: [] });
-  localStorage.setItem(TOKEN_KEY, JSON.stringify({ session: 0, actions: [] }));
-};
+  // --- UI ---
+  const mins = Math.floor(timer / 60);
+  const secs = timer % 60;
 
-
-   // --- UI ---
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-white">
       <header className="bg-gradient-to-r from-indigo-700 to-purple-700 text-white py-6 shadow-lg">
@@ -1046,7 +1200,6 @@ const handleResetSession = () => {
               <button
                 className="text-3xl font-bold flex items-center focus:outline-none hover:underline"
                 onClick={() => {
-                  // Remove current exam session from localStorage
                   if (sessionHash) {
                     localStorage.removeItem(SESSION_KEY_PREFIX + sessionHash);
                   }
@@ -1074,20 +1227,36 @@ const handleResetSession = () => {
                   setPracticeAnswer("");
                   setPracticeFeedback(null);
                 }}
-                style={{ background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer" }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  margin: 0,
+                  cursor: "pointer"
+                }}
                 type="button"
               >
                 <Brain className="h-8 w-8 mr-3" />
                 ExamAI Converter
               </button>
               <p className="text-indigo-100 mt-1">
-                All processing happens locally in your browser. Your API key is stored only on this device if you choose.
+                All processing happens locally in your browser. Your API key is
+                stored only on this device if you choose.
               </p>
             </div>
             <div className="hidden md:flex space-x-4">
-              <FeatureBadge icon={Zap} text="Convert exam text or images to a structured exam in-browser." />
-              <FeatureBadge icon={CheckCircle} text="Grading with your selected AI model (runs from this browser)." />
-              <FeatureBadge icon={Sparkles} text="Generate new practice exams on demand with your model." />
+              <FeatureBadge
+                icon={Zap}
+                text="Convert exam text or images to a structured exam in-browser."
+              />
+              <FeatureBadge
+                icon={CheckCircle}
+                text="Grading with your selected AI model (runs from this browser)."
+              />
+              <FeatureBadge
+                icon={Sparkles}
+                text="Generate new practice exams on demand with your model."
+              />
             </div>
             <button
               className="ml-6 bg-white text-indigo-700 px-4 py-2 rounded-lg shadow hover:bg-indigo-50 flex items-center"
@@ -1110,33 +1279,41 @@ const handleResetSession = () => {
 
         {settingsOpen && (
           <SettingsModal
-  apiKey={apiKey}
-  setApiKey={setApiKey}
-  model={model}
-  setModel={setModel}
-  ttsVoice={ttsVoice}
-  setTtsVoice={setTtsVoice}
-  saveKey={saveKey}
-  setSaveKey={setSaveKey}
-  onClose={() => setSettingsOpen(false)}
-  onSave={handleSaveSettings}
-  onDeleteKey={handleDeleteKey}
-  settingsSaved={settingsSaved}
-  tokenUsage={tokenUsage}
-  onResetSession={handleResetSession}
-/>
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            model={model}
+            setModel={setModel}
+            ttsVoice={ttsVoice}
+            setTtsVoice={setTtsVoice}
+            saveKey={saveKey}
+            setSaveKey={setSaveKey}
+            onClose={() => setSettingsOpen(false)}
+            onSave={handleSaveSettings}
+            onDeleteKey={handleDeleteKey}
+            settingsSaved={settingsSaved}
+            tokenUsage={tokenUsage}
+            onResetSession={handleResetSession}
+          />
         )}
 
         <div className="flex justify-between mb-4">
           <div>
             <button
-              className={`mr-2 px-4 py-2 rounded-lg ${!historyTab ? "bg-indigo-600 text-white" : "bg-white text-indigo-700 border border-indigo-300"} font-medium`}
+              className={`mr-2 px-4 py-2 rounded-lg ${
+                !historyTab
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white text-indigo-700 border border-indigo-300"
+              } font-medium`}
               onClick={() => setHistoryTab(false)}
             >
               Exam
             </button>
             <button
-              className={`px-4 py-2 rounded-lg ${historyTab ? "bg-indigo-600 text-white" : "bg-white text-indigo-700 border border-indigo-300"} font-medium`}
+              className={`px-4 py-2 rounded-lg ${
+                historyTab
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white text-indigo-700 border border-indigo-300"
+              } font-medium`}
               onClick={() => setHistoryTab(true)}
             >
               History
@@ -1144,7 +1321,8 @@ const handleResetSession = () => {
           </div>
           <div className="text-gray-600 text-sm flex items-center">
             <BarChart className="h-4 w-4 mr-1" />
-            Estimated tokens this session: <span className="font-bold ml-1">{tokenUsage.session}</span>
+            Estimated tokens this session:{" "}
+            <span className="font-bold ml-1">{tokenUsage.session}</span>
             <button
               className="ml-3 text-xs text-indigo-600 underline"
               onClick={handleResetSession}
@@ -1176,204 +1354,456 @@ const handleResetSession = () => {
               onNext={() => {
                 setPracticeFeedback(null);
                 setPracticeAnswer("");
-                setCurrentPracticeIndex(i => (i + 1) % practiceQuestions.length);
+                if (practiceQuestions.length > 0) {
+                  setCurrentPracticeIndex(
+                    (i) => (i + 1) % practiceQuestions.length
+                  );
+                }
               }}
               onPrev={() => {
                 setPracticeFeedback(null);
                 setPracticeAnswer("");
-                setCurrentPracticeIndex(i => (i - 1 + practiceQuestions.length) % practiceQuestions.length);
-            }}
-           onCheck={async () => {
-              const q = practiceQuestions[currentPracticeIndex];
-              if (!q) return;
-              setIsProcessing(true);
-              setPracticeFeedback(null);
-              let feedbackResult = null;
-              let feedbackType = "objective";
-              try {
-                if (q.type === "multipleChoice" || q.type === "trueFalse" || q.type === "checkbox") {
-                  // For objective: AI says yes/no and gives reasoning
-                  const prompt = [
-                    {
-                      role: "system",
-                      content:
-                        "You are an expert exam tutor. Given a question, options, and a user's answer, say 'Yes' if correct, 'No' if not. For multiple choice, explain why the answer is correct or not. For checkbox, explain which options are correct. For true/false, explain."
-                    },
-                    {
-                      role: "user",
-                      content: `Question: ${q.text}\nOptions: ${(q.options || []).join(", ")}\nUser Answer: ${practiceAnswer}\nCorrect Answer(s): ${q.correctAnswer || q.correctAnswers || ""}`
+                if (practiceQuestions.length > 0) {
+                  setCurrentPracticeIndex(
+                    (i) =>
+                      (i - 1 + practiceQuestions.length) %
+                      practiceQuestions.length
+                  );
+                }
+              }}
+              onCheck={async () => {
+                const q = practiceQuestions[currentPracticeIndex];
+                if (!q) return;
+                setIsProcessing(true);
+                setPracticeFeedback(null);
+                let feedbackResult = null;
+                let feedbackType = "objective";
+                try {
+                  const hasOptions =
+                    Array.isArray(q.options) && q.options.length > 0;
+                  const isObjective =
+                    hasOptions &&
+                    ["multipleChoice", "trueFalse", "checkbox"].includes(q.type);
+
+                  if (isObjective) {
+                    let userAnswerText = "";
+
+                    if (q.type === "checkbox") {
+                      const selectedOptions =
+                        practiceAnswer && typeof practiceAnswer === "object"
+                          ? Object.entries(practiceAnswer)
+                              .filter(([, v]) => v)
+                              .map(([k]) => k)
+                          : [];
+                      userAnswerText = selectedOptions.join(", ");
+                    } else {
+                      userAnswerText =
+                        typeof practiceAnswer === "string"
+                          ? practiceAnswer
+                          : String(practiceAnswer || "");
                     }
-                  ];
-                  const data = await callOpenAI({
-                    apiKey,
-                    model,
-                    messages: prompt,
-                    temperature: 0.2,
-                    max_tokens: 128
-                  });
-                  feedbackResult = data.choices[0].message.content.trim();
-                  setPracticeFeedback(feedbackResult);
-                } else if (q.type === "shortAnswer" || q.type === "text") {
-                  // For written: AI breaks down and marks
-                  const prompt = [
-                    {
-                      role: "system",
-                      content:
-                        "You are an expert exam marker. Given a question and a user's answer, break the answer into key points, mark each, and give a total mark out of the question's points. Return JSON: { breakdown: [ { point: string, achieved: boolean } ], score: int, feedback: string }"
-                    },
-                    {
-                      role: "user",
-                      content: `Question: ${q.text}\nPoints: ${q.points || 1}\nUser Answer: ${practiceAnswer}\nSample Answer: ${q.sampleAnswer || ""}`
-                    }
-                  ];
-                  const data = await callOpenAI({
-                    apiKey,
-                    model,
-                    messages: prompt,
-                    temperature: 0.2,
-                    max_tokens: 256
-                  });
-                  let parsed;
-                  try {
-                    parsed = robustLLMJsonParse(data.choices[0].message.content);
-                  } catch {
-                    // Try to extract JSON substring
-                    let content = data.choices[0].message.content;
-                    let jsonStr = content.match(/\{[\s\S]*\}/);
-                    if (jsonStr) {
-                      try {
-                        parsed = JSON.parse(jsonStr[0]);
-                      } catch {
+
+                    const prompt = [
+                      {
+                        role: "system",
+                        content:
+                          "You are an expert exam tutor. Given a question, options, and a student's answer, say 'Yes' if the answer is fully correct, 'No' if not. " +
+                          "Then briefly explain why. Keep the explanation short."
+                      },
+                      {
+                        role: "user",
+                        content: `Question: ${
+                          q.text
+                        }\nOptions: ${(q.options || []).join(
+                          ", "
+                        )}\nStudent Answer: ${userAnswerText}\nCorrect Answer(s): ${
+                          q.correctAnswer || q.correctAnswers || ""
+                        }`
+                      }
+                    ];
+
+                    const data = await callOpenAI({
+                      apiKey,
+                      model,
+                      messages: prompt,
+                      temperature: 0.2,
+                      max_tokens: 128
+                    });
+                    feedbackResult =
+                      data.choices[0].message.content.trim() ||
+                      "No feedback returned.";
+                    feedbackType = "objective";
+                    setPracticeFeedback(feedbackResult);
+                  } else {
+                    const prompt = [
+                      {
+                        role: "system",
+                        content:
+                          "You are an expert exam marker. Given a question and a student's answer, break the answer into key points, mark each, " +
+                          'and give a total mark out of the question\'s points. Return ONLY JSON: { "breakdown": [ { "point": string, "achieved": boolean } ], "score": int, "feedback": string }.'
+                      },
+                      {
+                        role: "user",
+                        content: `Question: ${q.text}\nPoints: ${
+                          q.points || 1
+                        }\nStudent Answer: ${
+                          typeof practiceAnswer === "string"
+                            ? practiceAnswer
+                            : String(practiceAnswer || "")
+                        }\nSample Answer: ${q.sampleAnswer || ""}`
+                      }
+                    ];
+
+                    const data = await callOpenAI({
+                      apiKey,
+                      model,
+                      messages: prompt,
+                      temperature: 0.2,
+                      max_tokens: 256
+                    });
+
+                    let parsed;
+                    try {
+                      parsed = robustLLMJsonParse(
+                        data.choices[0].message.content
+                      );
+                    } catch {
+                      const content =
+                        data.choices[0].message.content || "";
+                      const jsonMatch = content.match(/\{[\s\S]*\}/);
+                      if (jsonMatch) {
+                        try {
+                          parsed = JSON.parse(jsonMatch[0]);
+                        } catch {
+                          setPracticeFeedback("Could not parse AI feedback.");
+                          setIsProcessing(false);
+                          return;
+                        }
+                      } else {
                         setPracticeFeedback("Could not parse AI feedback.");
                         setIsProcessing(false);
                         return;
                       }
-                    } else {
-                      setPracticeFeedback("Could not parse AI feedback.");
-                      setIsProcessing(false);
-                      return;
                     }
+
+                    feedbackResult = parsed;
+                    feedbackType = "written";
+                    setPracticeFeedback(parsed);
                   }
-                  feedbackResult = parsed;
-                  feedbackType = "written";
-                  setPracticeFeedback(parsed);
+
+                  const historyEntry = {
+                    timestamp: Date.now(),
+                    question: q,
+                    answer: practiceAnswer,
+                    feedback: feedbackResult,
+                    feedbackType
+                  };
+                  setPracticeHistory((prev) => {
+                    const updated = [...prev, historyEntry];
+                    localStorage.setItem(
+                      "practiceHistory",
+                      JSON.stringify(updated)
+                    );
+                    return updated;
+                  });
+                } catch (e) {
+                  setPracticeFeedback(
+                    "AI error: " + (e.message || "unknown")
+                  );
                 }
-                // Save to practice history
-                const historyEntry = {
-                  timestamp: Date.now(),
-                  question: q,
-                  answer: practiceAnswer,
-                  feedback: feedbackResult,
-                  feedbackType
-                };
-                setPracticeHistory(prev => {
-                  const updated = [...prev, historyEntry];
-                  localStorage.setItem("practiceHistory", JSON.stringify(updated));
-                  return updated;
-                });
-              } catch (e) {
-                setPracticeFeedback("AI error: " + (e.message || "unknown"));
-              }
-              setIsProcessing(false);
-            }}
-            onSimilar={async () => {
-              // Request a similar question from AI
-              const q = practiceQuestions[currentPracticeIndex];
-              setIsProcessing(true);
-              try {
-                const prompt = [
-                  {
-                    role: "system",
-                    content:
-                      "You are an expert exam generator. Given a question, generate a similar question of the same type and difficulty. Return JSON: { text: string, options: array (if applicable), type: string, points: int, sampleAnswer: string (if applicable) }"
-                  },
-                  {
-                    role: "user",
-                    content: `Question: ${q.text}\nType: ${q.type}\nOptions: ${(q.options || []).join(", ")}`
-                  }
-                ];
-                const data = await callOpenAI({
-                  apiKey,
-                  model,
-                  messages: prompt,
-                  temperature: 0.3,
-                  max_tokens: 256
-                });
-                let newQ;
+                setIsProcessing(false);
+              }}
+              onSimilar={async () => {
+                const q = practiceQuestions[currentPracticeIndex];
+                if (!q) return;
+                setIsProcessing(true);
                 try {
-                  newQ = robustLLMJsonParse(data.choices[0].message.content);
-                } catch {
-                  setIsProcessing(false);
-                  return;
-                }
-                setPracticeQuestions(prev => [
-                  ...prev.slice(0, currentPracticeIndex + 1),
-                  newQ,
-                  ...prev.slice(currentPracticeIndex + 1)
-                ]);
-                setCurrentPracticeIndex(i => i + 1);
-                setPracticeAnswer("");
-                setPracticeFeedback(null);
-              } catch (e) {
-                setPracticeFeedback("AI error: " + (e.message || "unknown"));
-              }
-              setIsProcessing(false);
-            }}
-            onDifferent={async () => {
-              // Request a different question (random from pool)
-              if (practiceQuestions.length > 1) {
-                setCurrentPracticeIndex(i => (i + 1) % practiceQuestions.length);
-                setPracticeAnswer("");
-                setPracticeFeedback(null);
-              }
-            }}
-            onRequestType={async (type) => {
-              // Request a question of a specific type
-              setIsProcessing(true);
-              try {
-                const prompt = [
-                  {
-                    role: "system",
-                    content:
-                      "You are an expert exam generator. Generate a question of the requested type (multiple choice, short answer, etc) on the same subject as the uploaded exam. Return JSON: { text: string, options: array (if applicable), type: string, points: int, sampleAnswer: string (if applicable) }"
-                  },
-                  {
-                    role: "user",
-                    content: `Type: ${type}\nSubject: ${examJSON?.title || "General"}`
+                  const prompt = [
+                    {
+                      role: "system",
+                      content:
+                        "You are an expert exam generator. Given a question, generate a similar question of the same type and difficulty. " +
+                        "Return JSON: { text: string, options: array (if applicable), type: string, points: int, sampleAnswer: string (if applicable) }"
+                    },
+                    {
+                      role: "user",
+                      content: `Question: ${q.text}\nType: ${
+                        q.type
+                      }\nOptions: ${(q.options || []).join(", ")}`
+                    }
+                  ];
+                  const data = await callOpenAI({
+                    apiKey,
+                    model,
+                    messages: prompt,
+                    temperature: 0.3,
+                    max_tokens: 256
+                  });
+                  let newQ;
+                  try {
+                    newQ = robustLLMJsonParse(
+                      data.choices[0].message.content
+                    );
+                  } catch {
+                    setIsProcessing(false);
+                    return;
                   }
-                ];
-                const data = await callOpenAI({
-                  apiKey,
-                  model,
-                  messages: prompt,
-                  temperature: 0.3,
-                  max_tokens: 256
-                });
-                let newQ;
-                try {
-                  newQ = robustLLMJsonParse(data.choices[0].message.content);
-                } catch {
-                  setIsProcessing(false);
-                  return;
+                  setPracticeQuestions((prev) => {
+                    const updated = [...prev];
+                    updated.splice(currentPracticeIndex + 1, 0, newQ);
+                    return updated;
+                  });
+                  setCurrentPracticeIndex((i) => i + 1);
+                  setPracticeAnswer("");
+                  setPracticeFeedback(null);
+                } catch (e) {
+                  setPracticeFeedback(
+                    "AI error: " + (e.message || "unknown")
+                  );
                 }
-                setPracticeQuestions(prev => [
-                  ...prev.slice(0, currentPracticeIndex + 1),
-                  newQ,
-                  ...prev.slice(currentPracticeIndex + 1)
-                ]);
-                setCurrentPracticeIndex(i => i + 1);
-                setPracticeAnswer("");
-                setPracticeFeedback(null);
-              } catch (e) {
-                setPracticeFeedback("AI error: " + (e.message || "unknown"));
-              }
-              setIsProcessing(false);
-            }}
-            isProcessing={isProcessing}
-          />
+                setIsProcessing(false);
+              }}
+              onDifferent={async () => {
+                if (practiceQuestions.length > 1) {
+                  setPracticeFeedback(null);
+                  setPracticeAnswer("");
+                  setCurrentPracticeIndex(
+                    (i) => (i + 1) % practiceQuestions.length
+                  );
+                }
+              }}
+              onRequestType={async (type) => {
+                setIsProcessing(true);
+                try {
+                  const prompt = [
+                    {
+                      role: "system",
+                      content:
+                        "You are an expert exam generator. Generate a question of the requested type (multiple choice, short answer, checkbox, essay, etc.) " +
+                        "on the same subject as the uploaded exam. Return JSON: { text: string, options: array (if applicable), type: string, points: int, sampleAnswer: string (if applicable) }"
+                    },
+                    {
+                      role: "user",
+                      content: `Type: ${type}\nSubject: ${
+                        examJSON?.title || "General"
+                      }`
+                    }
+                  ];
+                  const data = await callOpenAI({
+                    apiKey,
+                    model,
+                    messages: prompt,
+                    temperature: 0.3,
+                    max_tokens: 256
+                  });
+                  let newQ;
+                  try {
+                    newQ = robustLLMJsonParse(
+                      data.choices[0].message.content
+                    );
+                  } catch {
+                    setIsProcessing(false);
+                    return;
+                  }
+                  setPracticeQuestions((prev) => {
+                    const updated = [...prev];
+                    updated.splice(currentPracticeIndex + 1, 0, newQ);
+                    return updated;
+                  });
+                  setCurrentPracticeIndex((i) => i + 1);
+                  setPracticeAnswer("");
+                  setPracticeFeedback(null);
+                } catch (e) {
+                  setPracticeFeedback(
+                    "AI error: " + (e.message || "unknown")
+                  );
+                }
+                setIsProcessing(false);
+              }}
+              isProcessing={isProcessing}
+              practiceHistory={practiceHistory}
+            />
+          </>
         ) : !examJSON ? (
-          <div className="max-w-4xl mx-auto">
-            {/* ... */}
+          <div className="max-w-5xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <FeatureCard
+                icon={Compass}
+                title="Single-question drills"
+                description="Upload an exam and we’ll pull out one question at a time so you can focus without being overwhelmed."
+                color="indigo"
+              />
+              <FeatureCard
+                icon={Brain}
+                title="Smart marking"
+                description="Multiple choice gets a simple yes/no with reasoning. Written answers are broken into key points and marked."
+                color="purple"
+              />
+              <FeatureCard
+                icon={Coffee}
+                title="Rapid retries"
+                description="Ask for similar or completely different questions, or request a specific type like essay or multi-choice."
+                color="blue"
+              />
+            </div>
+
+            <div className="bg-white rounded-xl shadow-xl border border-indigo-100 p-8">
+              <h2 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+                <Upload className="h-6 w-6 mr-2 text-indigo-600" />
+                Upload an assessment to start practising
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Choose how you want to give the exam to the AI. After
+                conversion you’ll drop straight into single-question practice,
+                with the full exam still available.
+              </p>
+
+              <div className="grid md:grid-cols-2 gap-4 mb-6">
+                <UploadOption
+                  icon={FileText}
+                  title="Paste exam text"
+                  description="Copy and paste questions from a document, LMS, or PDF export."
+                  onClick={() => handleUpload("text")}
+                  active={uploadType === "text"}
+                  disabled={isProcessing}
+                  features={[
+                    "Best for clean text",
+                    "Supports long exams",
+                    "Keeps formatting simple"
+                  ]}
+                />
+                <UploadOption
+                  icon={Image}
+                  title="Upload image (OCR)"
+                  description="Upload a clear photo or screenshot of an exam page and we’ll run OCR on it."
+                  onClick={() => handleUpload("image")}
+                  active={uploadType === "image"}
+                  disabled={isProcessing}
+                  features={[
+                    "Use photos or screenshots",
+                    "Automatic text extraction",
+                    "Edit OCR output before converting"
+                  ]}
+                />
+              </div>
+
+              {uploadType === "text" && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Paste your exam or assignment
+                  </label>
+                  <textarea
+                    className="w-full border border-gray-300 rounded-lg p-4 h-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Paste the full exam, assignment, or essay prompts here..."
+                    value={rawText}
+                    onChange={(e) => setRawText(e.target.value)}
+                    disabled={isProcessing}
+                  />
+                </div>
+              )}
+
+              {uploadType === "image" && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Upload an exam image
+                  </label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileInput}
+                    className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none"
+                    disabled={isProcessing}
+                  />
+                  {ocrFileName && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Selected:{" "}
+                      <span className="font-medium">{ocrFileName}</span>
+                    </p>
+                  )}
+                  <div className="mt-4">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      OCR preview (you can edit this before converting)
+                    </label>
+                    <textarea
+                      className="w-full border border-gray-300 rounded-lg p-3 h-48 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      value={ocrText}
+                      onChange={(e) => setOcrText(e.target.value)}
+                      placeholder={
+                        isProcessing
+                          ? "Running OCR on the image..."
+                          : "The recognised text will appear here."
+                      }
+                      disabled={isProcessing}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {uploadType === "none" && (
+                <p className="text-gray-500 text-sm mb-6">
+                  Pick an upload method above to get started.
+                </p>
+              )}
+
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-gray-500 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-1 text-yellow-500" />
+                  Make sure there are no student names or personal data in the
+                  text you paste.
+                </div>
+                <button
+                  type="button"
+                  onClick={handleProcessExam}
+                  disabled={
+                    isProcessing ||
+                    !(
+                      (uploadType === "text" && rawText.trim()) ||
+                      (uploadType === "image" && ocrText.trim())
+                    )
+                  }
+                  className={`inline-flex items-center px-5 py-3 rounded-lg text-sm font-medium shadow ${
+                    isProcessing ||
+                    !(
+                      (uploadType === "text" && rawText.trim()) ||
+                      (uploadType === "image" && ocrText.trim())
+                    )
+                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      : "bg-indigo-600 text-white hover:bg-indigo-700"
+                  }`}
+                >
+                  {isProcessing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Processing…
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="h-4 w-4 mr-2" />
+                      Convert to AI Exam
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-10 grid md:grid-cols-3 gap-6">
+              <FeatureStep
+                number={1}
+                title="Upload once"
+                description="Paste or scan the exam and let the AI pull out all the questions."
+              />
+              <FeatureStep
+                number={2}
+                title="Drill one question"
+                description="We start you on a single question drawn from this or a similar exam."
+              />
+              <FeatureStep
+                number={3}
+                title="Iterate with AI"
+                description="Check your answer, ask for similar or harder questions, or switch to full exam view."
+              />
+            </div>
           </div>
         ) : (
           <ExamView
@@ -1404,22 +1834,27 @@ const handleResetSession = () => {
         )}
       </main>
 
-{/* Floating AI Voice Tutor */}
-<VoiceTutor
-  apiKey={apiKey}
-  model={model}
-  examJSON={examJSON}
-  ttsVoice={ttsVoice}
-/>
-
+      <VoiceTutor apiKey={apiKey} model={model} examJSON={examJSON} ttsVoice={ttsVoice} />
     </div>
   );
 }
 
 // --- Settings Modal ---
 function SettingsModal({
-  apiKey, setApiKey, model, setModel, ttsVoice, setTtsVoice, saveKey, setSaveKey,
-  onClose, onSave, onDeleteKey, settingsSaved, tokenUsage, onResetSession
+  apiKey,
+  setApiKey,
+  model,
+  setModel,
+  ttsVoice,
+  setTtsVoice,
+  saveKey,
+  setSaveKey,
+  onClose,
+  onSave,
+  onDeleteKey,
+  settingsSaved,
+  tokenUsage,
+  onResetSession
 }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center">
@@ -1429,12 +1864,18 @@ function SettingsModal({
           Settings
         </h2>
         <div className="absolute top-0 right-0 p-4">
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-800"
+          >
             <X className="h-6 w-6" />
           </button>
         </div>
         <div className="mb-4">
-          <label htmlFor="apiKey" className="block font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="apiKey"
+            className="block font-medium text-gray-700 mb-1"
+          >
             API Key
           </label>
           <input
@@ -1442,52 +1883,63 @@ function SettingsModal({
             type="password"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
             value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
+            onChange={(e) => setApiKey(e.target.value)}
             autoComplete="off"
           />
           <div className="text-xs text-gray-500 mt-1">
-            Your API key is stored in this browser only. Do not distribute this build.
+            Your API key is stored in this browser only. Do not distribute this
+            build.
           </div>
         </div>
         <div className="mb-4">
-          <label htmlFor="model" className="block font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="model"
+            className="block font-medium text-gray-700 mb-1"
+          >
             Model
           </label>
           <select
             id="model"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
             value={model}
-            onChange={e => setModel(e.target.value)}
+            onChange={(e) => setModel(e.target.value)}
           >
-            {MODELS.map(m => (
-              <option key={m.id} value={m.id}>{m.label}</option>
+            {MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
             ))}
           </select>
         </div>
         <div className="mb-4">
-  <label htmlFor="voice" className="block font-medium text-gray-700 mb-1">
-    Voice (OpenAI TTS)
-  </label>
-  <select
-    id="voice"
-    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-    value={ttsVoice}
-    onChange={e => setTtsVoice(e.target.value)}
-  >
-    {VOICES.map(v => (
-      <option key={v.id} value={v.id}>{v.label}</option>
-    ))}
-  </select>
-  <div className="text-xs text-gray-500 mt-1">
-    Used by the AI Voice Tutor when speaking answers.
-  </div>
-</div>
+          <label
+            htmlFor="voice"
+            className="block font-medium text-gray-700 mb-1"
+          >
+            Voice (OpenAI TTS)
+          </label>
+          <select
+            id="voice"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+            value={ttsVoice}
+            onChange={(e) => setTtsVoice(e.target.value)}
+          >
+            {VOICES.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+          <div className="text-xs text-gray-500 mt-1">
+            Used by the AI Voice Tutor when speaking answers.
+          </div>
+        </div>
         <div className="mb-4 flex items-center">
           <input
             id="saveKey"
             type="checkbox"
             checked={saveKey}
-            onChange={e => setSaveKey(e.target.checked)}
+            onChange={(e) => setSaveKey(e.target.checked)}
             className="mr-2"
           />
           <label htmlFor="saveKey" className="text-gray-700">
@@ -1513,7 +1965,8 @@ function SettingsModal({
         </div>
         <div className="mb-4">
           <div className="text-xs text-gray-500">
-            <span className="font-bold">Estimated tokens this session:</span> {tokenUsage.session}
+            <span className="font-bold">Estimated tokens this session:</span>{" "}
+            {tokenUsage.session}
             <button
               className="ml-2 text-indigo-600 underline"
               onClick={onResetSession}
@@ -1535,30 +1988,67 @@ function SettingsModal({
 
 // --- Exam View ---
 function ExamView({
-  examJSON, answers, onAnswerChange, showHints, setShowHints,
-  helpPanelOpen, setHelpPanelOpen, activeHelpTool, setActiveHelpTool,
-  examCompleted, examScore, textAnswersFeedback, onSubmitExam, isProcessing,
-  onGenerateNewExam, timer, totalQuestions, answeredCount, tokenUsage, canSubmit,
-  timerEnabled, setTimerEnabled, aiSuggestedTime
+  examJSON,
+  answers,
+  onAnswerChange,
+  showHints,
+  setShowHints,
+  helpPanelOpen,
+  setHelpPanelOpen,
+  activeHelpTool,
+  setActiveHelpTool,
+  examCompleted,
+  examScore,
+  textAnswersFeedback,
+  onSubmitExam,
+  isProcessing,
+  onGenerateNewExam,
+  timer,
+  totalQuestions,
+  answeredCount,
+  tokenUsage,
+  canSubmit,
+  timerEnabled,
+  setTimerEnabled,
+  aiSuggestedTime
 }) {
-  // Timer display
   const mins = Math.floor(timer / 60);
   const secs = timer % 60;
+
+  const totalPoints =
+    (examJSON.multipleChoice || []).reduce(
+      (a, q) => a + (q.points || 1),
+      0
+    ) +
+    (examJSON.trueFalse || []).reduce((a, q) => a + (q.points || 1), 0) +
+    (examJSON.checkbox || []).reduce((a, q) => a + (q.points || 1), 0) +
+    (examJSON.shortAnswer || []).reduce((a, q) => a + (q.points || 1), 0);
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="flex">
-        <div className={`transition-all duration-300 ${helpPanelOpen ? "w-3/4 pr-4" : "w-full"}`}>
+        <div
+          className={`transition-all duration-300 ${
+            helpPanelOpen ? "w-3/4 pr-4" : "w-full"
+          }`}
+        >
           <div className="bg-white rounded-xl shadow-xl p-8 mb-6 border border-indigo-100">
             <div className="flex justify-between items-center mb-8 border-b border-gray-200 pb-4">
               <div>
-                <h2 className="text-2xl font-bold text-gray-800">{examJSON.title || "Exam"}</h2>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {examJSON.title || "Exam"}
+                </h2>
                 <div className="flex items-center space-x-4 mt-1">
                   <p className="text-gray-500">
                     {timerEnabled ? (
                       <>
-                        Time Remaining: {mins}:{secs.toString().padStart(2, "0")}
+                        Time Remaining: {mins}:
+                        {secs.toString().padStart(2, "0")}
                         {aiSuggestedTime && (
-                          <span className="ml-2 text-xs text-blue-600">(AI suggested: {Math.floor(aiSuggestedTime / 60)} min)</span>
+                          <span className="ml-2 text-xs text-blue-600">
+                            (AI suggested:{" "}
+                            {Math.floor(aiSuggestedTime / 60)} min)
+                          </span>
                         )}
                       </>
                     ) : (
@@ -1566,24 +2056,23 @@ function ExamView({
                     )}
                   </p>
                   <button
-                    className={`ml-2 px-2 py-1 rounded text-xs border ${timerEnabled ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}
-                    onClick={() => setTimerEnabled(t => !t)}
+                    className={`ml-2 px-2 py-1 rounded text-xs border ${
+                      timerEnabled
+                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                        : "bg-gray-100 text-gray-500 border-gray-200"
+                    }`}
+                    onClick={() => setTimerEnabled((t) => !t)}
                   >
                     {timerEnabled ? "Disable Timer" : "Enable Timer"}
                   </button>
                 </div>
                 <p className="text-gray-500 mt-1">
-                  Total Points: {examScore ? examScore.total : (
-                    (examJSON.multipleChoice || []).reduce((a, q) => a + (q.points || 1), 0) +
-                    (examJSON.trueFalse || []).reduce((a, q) => a + (q.points || 1), 0) +
-                    (examJSON.checkbox || []).reduce((a, q) => a + (q.points || 1), 0) +
-                    (examJSON.shortAnswer || []).reduce((a, q) => a + (q.points || 1), 0)
-                  )}
+                  Total Points: {examScore ? examScore.total : totalPoints}
                 </p>
               </div>
               <div className="flex space-x-3">
                 <button
-                  onClick={() => setShowHints(h => !h)}
+                  onClick={() => setShowHints((h) => !h)}
                   className={`px-3 py-2 rounded-lg border transition flex items-center ${
                     showHints
                       ? "bg-yellow-100 text-yellow-700 border-yellow-300"
@@ -1594,7 +2083,7 @@ function ExamView({
                   {showHints ? "Hide Hints" : "Show Hints"}
                 </button>
                 <button
-                  onClick={() => setHelpPanelOpen(h => !h)}
+                  onClick={() => setHelpPanelOpen((h) => !h)}
                   className={`px-3 py-2 rounded-lg border transition flex items-center ${
                     helpPanelOpen
                       ? "bg-indigo-100 text-indigo-700 border-indigo-300"
@@ -1615,6 +2104,7 @@ function ExamView({
                 )}
               </div>
             </div>
+
             <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
               <div className="flex items-center">
                 <Clock className="h-5 w-5 text-blue-500 mr-2" />
@@ -1623,9 +2113,11 @@ function ExamView({
                 </span>
               </div>
               <div className="text-blue-700 text-sm">
-                <span className="font-medium">Progress:</span> {answeredCount} of {totalQuestions} answered
+                <span className="font-medium">Progress:</span> {answeredCount}{" "}
+                of {totalQuestions} answered
               </div>
             </div>
+
             {examCompleted ? (
               <div className="space-y-8">
                 <div className="bg-indigo-50 rounded-xl p-6 border border-indigo-100">
@@ -1636,21 +2128,34 @@ function ExamView({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white rounded-lg p-5 shadow-sm border border-indigo-100">
                       <div className="flex justify-between items-center mb-4">
-                        <h4 className="text-lg font-medium text-gray-700">Overall Score</h4>
-                        <div className="text-2xl font-bold text-indigo-600">{examScore.earned}/{examScore.total}</div>
+                        <h4 className="text-lg font-medium text-gray-700">
+                          Overall Score
+                        </h4>
+                        <div className="text-2xl font-bold text-indigo-600">
+                          {examScore.earned}/{examScore.total}
+                        </div>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
                         <div
                           className="bg-indigo-600 h-4 rounded-full"
-                          style={{ width: `${(examScore.earned / examScore.total) * 100}%` }}
+                          style={{
+                            width: `${
+                              (examScore.earned / examScore.total) * 100
+                            }%`
+                          }}
                         ></div>
                       </div>
                       <div className="text-right text-gray-500 text-sm">
-                        {Math.round((examScore.earned / examScore.total) * 100)}% Correct
+                        {Math.round(
+                          (examScore.earned / examScore.total) * 100
+                        )}
+                        % Correct
                       </div>
                     </div>
                     <div className="bg-white rounded-lg p-5 shadow-sm border border-indigo-100">
-                      <h4 className="text-lg font-medium text-gray-700 mb-4">Section Breakdown</h4>
+                      <h4 className="text-lg font-medium text-gray-700 mb-4">
+                        Section Breakdown
+                      </h4>
                       <div className="space-y-3">
                         <ScoreBar
                           label="Multiple Choice"
@@ -1685,56 +2190,74 @@ function ExamView({
                       className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition shadow-md flex items-center mx-auto text-lg font-medium"
                       disabled={isProcessing}
                     >
-                      <RefreshCw className="h-5 w-5 mr-2" /> Generate New Practice Exam
+                      <RefreshCw className="h-5 w-5 mr-2" /> Generate New
+                      Practice Exam
                     </button>
-                    <p className="text-gray-500 mt-2">Create a new exam with similar questions to practice further</p>
+                    <p className="text-gray-500 mt-2">
+                      Create a new exam with similar questions to practice
+                      further
+                    </p>
                   </div>
                 </div>
+
                 <div className="space-y-8">
                   <h3 className="text-xl font-bold text-gray-800 flex items-center">
                     <Eye className="h-6 w-6 mr-2 text-indigo-600" />
                     Detailed Review
                   </h3>
-                  {Array.isArray(examJSON.multipleChoice) && examJSON.multipleChoice.length > 0 && (
-                    <ExamSection
-                      title="Multiple Choice Questions"
-                      description="Select the best answer for each question."
-                      questions={examJSON.multipleChoice}
-                      answers={answers}
-                      showHints={showHints}
-                      onAnswerChange={onAnswerChange}
-                    />
-                  )}
-                  {Array.isArray(examJSON.trueFalse) && examJSON.trueFalse.length > 0 && (
-                    <ExamSection
-                      title="True/False Questions"
-                      description="Indicate whether each statement is true or false."
-                      questions={examJSON.trueFalse}
-                      answers={answers}
-                      showHints={showHints}
-                      onAnswerChange={onAnswerChange}
-                    />
-                  )}
-                  {Array.isArray(examJSON.checkbox) && examJSON.checkbox.length > 0 && (
-                    <ExamSection
-                      title="Checkbox Questions"
-                      description="Select ALL correct answers for each question."
-                      questions={examJSON.checkbox}
-                      answers={answers}
-                      showHints={showHints}
-                      onAnswerChange={onAnswerChange}
-                    />
-                  )}
-                  {Array.isArray(examJSON.shortAnswer) && examJSON.shortAnswer.length > 0 && (
-                    <ExamSection
-                      title="Short Answer Questions"
-                      description="Provide brief answers to the following questions."
-                      questions={examJSON.shortAnswer}
-                      answers={answers}
-                      showHints={showHints}
-                      onAnswerChange={onAnswerChange}
-                    />
-                  )}
+
+                  {Array.isArray(examJSON.multipleChoice) &&
+                    examJSON.multipleChoice.length > 0 && (
+                      <ExamSection
+                        title="Multiple Choice Questions"
+                        description="Select the best answer for each question."
+                        questions={examJSON.multipleChoice}
+                        answers={answers}
+                        showAnswers={true}
+                        showHints={showHints}
+                        onAnswerChange={onAnswerChange}
+                        textAnswersFeedback={textAnswersFeedback}
+                      />
+                    )}
+                  {Array.isArray(examJSON.trueFalse) &&
+                    examJSON.trueFalse.length > 0 && (
+                      <ExamSection
+                        title="True/False Questions"
+                        description="Indicate whether each statement is true or false."
+                        questions={examJSON.trueFalse}
+                        answers={answers}
+                        showAnswers={true}
+                        showHints={showHints}
+                        onAnswerChange={onAnswerChange}
+                        textAnswersFeedback={textAnswersFeedback}
+                      />
+                    )}
+                  {Array.isArray(examJSON.checkbox) &&
+                    examJSON.checkbox.length > 0 && (
+                      <ExamSection
+                        title="Checkbox Questions"
+                        description="Select ALL correct answers for each question."
+                        questions={examJSON.checkbox}
+                        answers={answers}
+                        showAnswers={true}
+                        showHints={showHints}
+                        onAnswerChange={onAnswerChange}
+                        textAnswersFeedback={textAnswersFeedback}
+                      />
+                    )}
+                  {Array.isArray(examJSON.shortAnswer) &&
+                    examJSON.shortAnswer.length > 0 && (
+                      <ExamSection
+                        title="Short Answer Questions"
+                        description="Provide brief answers to the following questions."
+                        questions={examJSON.shortAnswer}
+                        answers={answers}
+                        showAnswers={true}
+                        showHints={showHints}
+                        onAnswerChange={onAnswerChange}
+                        textAnswersFeedback={textAnswersFeedback}
+                      />
+                    )}
                 </div>
               </div>
             ) : (
@@ -1744,32 +2267,40 @@ function ExamView({
                   description="Select the best answer for each question."
                   questions={examJSON.multipleChoice}
                   answers={answers}
+                  showAnswers={false}
                   showHints={showHints}
                   onAnswerChange={onAnswerChange}
+                  textAnswersFeedback={textAnswersFeedback}
                 />
                 <ExamSection
                   title="True/False Questions"
                   description="Indicate whether each statement is true or false."
                   questions={examJSON.trueFalse}
                   answers={answers}
+                  showAnswers={false}
                   showHints={showHints}
                   onAnswerChange={onAnswerChange}
+                  textAnswersFeedback={textAnswersFeedback}
                 />
                 <ExamSection
                   title="Checkbox Questions"
                   description="Select ALL correct answers for each question."
                   questions={examJSON.checkbox}
                   answers={answers}
+                  showAnswers={false}
                   showHints={showHints}
                   onAnswerChange={onAnswerChange}
+                  textAnswersFeedback={textAnswersFeedback}
                 />
                 <ExamSection
                   title="Short Answer Questions"
                   description="Provide brief answers to the following questions."
                   questions={examJSON.shortAnswer}
                   answers={answers}
+                  showAnswers={false}
                   showHints={showHints}
                   onAnswerChange={onAnswerChange}
+                  textAnswersFeedback={textAnswersFeedback}
                 />
                 <div className="mt-8 flex justify-between items-center bg-gray-50 p-4 rounded-lg border border-gray-200">
                   <div className="text-gray-500 text-sm flex items-center">
@@ -1778,10 +2309,14 @@ function ExamView({
                   </div>
                   <button
                     onClick={onSubmitExam}
-                    className={`bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition shadow-md flex items-center font-medium ${canSubmit ? "" : "opacity-50 cursor-not-allowed"}`}
+                    className={`bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition shadow-md flex items-center font-medium ${
+                      canSubmit ? "" : "opacity-50 cursor-not-allowed"
+                    }`}
                     disabled={!canSubmit || isProcessing}
                     aria-disabled={!canSubmit}
-                    title={!canSubmit ? "Answer all required questions." : ""}
+                    title={
+                      !canSubmit ? "Answer all required questions." : ""
+                    }
                   >
                     <CheckCircle className="h-5 w-5 mr-2" />
                     Submit Exam for Grading
@@ -1791,6 +2326,7 @@ function ExamView({
             )}
           </div>
         </div>
+
         {helpPanelOpen && (
           <div className="w-[420px] min-w-[380px] max-w-[520px] pl-6 transition-all duration-300">
             <div className="bg-white rounded-xl shadow-lg border border-indigo-100 sticky top-4">
@@ -1799,7 +2335,9 @@ function ExamView({
                   <HelpCircle className="h-6 w-6 mr-2 text-indigo-600" />
                   Exam Help Tools
                 </h3>
-                <p className="text-gray-500 text-base mt-1">AI-powered assistance for your exam</p>
+                <p className="text-gray-500 text-base mt-1">
+                  AI-powered assistance for your exam
+                </p>
               </div>
               <div className="p-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -1844,7 +2382,9 @@ function ExamView({
               <div className="p-6 border-t border-gray-200">
                 {activeHelpTool === "concepts" && (
                   <div className="space-y-4">
-                    <h4 className="font-medium text-gray-700">Key Concepts</h4>
+                    <h4 className="font-medium text-gray-700">
+                      Key Concepts
+                    </h4>
                     <div className="space-y-3">
                       <ConceptCard
                         title="Exam is processed and graded locally"
@@ -1863,40 +2403,94 @@ function ExamView({
                 )}
                 {activeHelpTool === "calculator" && (
                   <div className="space-y-4">
-                    <h4 className="font-medium text-gray-700">Scientific Calculator</h4>
+                    <h4 className="font-medium text-gray-700">
+                      Scientific Calculator
+                    </h4>
                     <div className="bg-gray-100 p-4 rounded-lg">
                       <div className="bg-white p-2 rounded mb-3 text-right h-10 flex items-center justify-end text-lg font-mono">
                         0
                       </div>
                       <div className="grid grid-cols-4 gap-2">
-                        {["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "-", "0", ".", "=", "+"].map((key) => (
-                          <button key={key} className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded shadow">
+                        {[
+                          "7",
+                          "8",
+                          "9",
+                          "÷",
+                          "4",
+                          "5",
+                          "6",
+                          "×",
+                          "1",
+                          "2",
+                          "3",
+                          "-",
+                          "0",
+                          ".",
+                          "=",
+                          "+"
+                        ].map((key) => (
+                          <button
+                            key={key}
+                            className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded shadow"
+                          >
                             {key}
                           </button>
                         ))}
                       </div>
                       <div className="grid grid-cols-4 gap-2 mt-2">
-                        {["sin", "cos", "tan", "^", "log", "ln", "√", "π"].map((key) => (
-                          <button key={key} className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium py-2 px-2 rounded shadow text-sm">
+                        {[
+                          "sin",
+                          "cos",
+                          "tan",
+                          "^",
+                          "log",
+                          "ln",
+                          "√",
+                          "π"
+                        ].map((key) => (
+                          <button
+                            key={key}
+                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium py-2 px-2 rounded shadow text-sm"
+                          >
                             {key}
                           </button>
                         ))}
                       </div>
                     </div>
-                    <p className="text-gray-500 text-xs text-center">This is a demo calculator. In a real implementation, it would be fully functional.</p>
+                    <p className="text-gray-500 text-xs text-center">
+                      This is a demo calculator. In a real implementation, it
+                      would be fully functional.
+                    </p>
                   </div>
                 )}
                 {activeHelpTool === "tutor" && (
                   <AITutorChat
-                    apiKey={typeof window !== "undefined" ? localStorage.getItem("examAI:settings") ? JSON.parse(localStorage.getItem("examAI:settings")).apiKey : "" : ""}
-                    model={typeof window !== "undefined" ? localStorage.getItem("examAI:settings") ? JSON.parse(localStorage.getItem("examAI:settings")).model : "gpt-3.5-turbo" : "gpt-3.5-turbo"}
+                    apiKey={
+                      typeof window !== "undefined"
+                        ? localStorage.getItem("examAI:settings")
+                          ? JSON.parse(
+                              localStorage.getItem("examAI:settings")
+                            ).apiKey
+                          : ""
+                        : ""
+                    }
+                    model={
+                      typeof window !== "undefined"
+                        ? localStorage.getItem("examAI:settings")
+                          ? JSON.parse(
+                              localStorage.getItem("examAI:settings")
+                            ).model
+                          : "gpt-3.5-turbo"
+                        : "gpt-3.5-turbo"
+                    }
                     examJSON={examJSON}
                   />
                 )}
-                
                 {activeHelpTool === "search" && (
                   <div className="space-y-4">
-                    <h4 className="font-medium text-gray-700">Search Concepts</h4>
+                    <h4 className="font-medium text-gray-700">
+                      Search Concepts
+                    </h4>
                     <div className="relative">
                       <input
                         type="text"
@@ -1907,32 +2501,44 @@ function ExamView({
                     </div>
                     <div className="bg-gray-100 rounded-lg p-3 h-64 overflow-y-auto">
                       <p className="text-gray-500 text-center py-8">
-                        Enter a search term to find relevant concepts and explanations
+                        Enter a search term to find relevant concepts and
+                        explanations
                       </p>
                     </div>
                   </div>
                 )}
                 {activeHelpTool === "bookmarks" && (
                   <div className="space-y-4">
-                    <h4 className="font-medium text-gray-700">Bookmarked Questions</h4>
+                    <h4 className="font-medium text-gray-700">
+                      Bookmarked Questions
+                    </h4>
                     <div className="bg-gray-100 rounded-lg p-3 h-64 overflow-y-auto">
                       <p className="text-gray-500 text-center py-8">
-                        No bookmarked questions yet. Click the bookmark icon on any question to save it for later review.
+                        No bookmarked questions yet. Click the bookmark icon on
+                        any question to save it for later review.
                       </p>
                     </div>
                   </div>
                 )}
                 {activeHelpTool === "settings" && (
                   <div className="space-y-4">
-                    <h4 className="font-medium text-gray-700">Exam Settings</h4>
+                    <h4 className="font-medium text-gray-700">
+                      Exam Settings
+                    </h4>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600">Show Hints</span>
                         <button
-                          onClick={() => setShowHints(h => !h)}
-                          className={`w-10 h-5 rounded-full flex items-center transition-colors duration-300 focus:outline-none ${showHints ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                          onClick={() => setShowHints((h) => !h)}
+                          className={`w-10 h-5 rounded-full flex items-center transition-colors duration-300 focus:outline-none ${
+                            showHints ? "bg-indigo-600" : "bg-gray-300"
+                          }`}
                         >
-                          <span className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform duration-300 ${showHints ? 'translate-x-5' : 'translate-x-1'}`}></span>
+                          <span
+                            className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform duration-300 ${
+                              showHints ? "translate-x-5" : "translate-x-1"
+                            }`}
+                          ></span>
                         </button>
                       </div>
                     </div>
@@ -1963,43 +2569,73 @@ function ExamView({
 }
 
 // --- Exam Section ---
-function ExamSection({ title, description, questions, answers, showAnswers, showHints, onAnswerChange, textAnswersFeedback }) {
+function ExamSection({
+  title,
+  description,
+  questions = [],
+  answers,
+  showAnswers,
+  showHints,
+  onAnswerChange,
+  textAnswersFeedback
+}) {
   const [revealedHints, setRevealedHints] = useState({});
 
   const handleRevealHint = (qid) => {
-    setRevealedHints(prev => ({ ...prev, [qid]: true }));
+    setRevealedHints((prev) => ({ ...prev, [qid]: true }));
   };
 
-  // Helper: determine correctness for radio/checkbox
   function getRadioCorrectness(question, answers) {
     if (!showAnswers) return "";
-    if (typeof question.correctAnswer === "undefined" || question.correctAnswer === null) return "";
-    if (answers[question.id] === undefined || answers[question.id] === "") return "unanswered";
-    return answers[question.id] === question.correctAnswer ? "correct" : "incorrect";
+    if (
+      typeof question.correctAnswer === "undefined" ||
+      question.correctAnswer === null
+    )
+      return "";
+    if (
+      answers[question.id] === undefined ||
+      answers[question.id] === ""
+    )
+      return "unanswered";
+    return answers[question.id] === question.correctAnswer
+      ? "correct"
+      : "incorrect";
   }
+
   function getCheckboxCorrectness(question, answers) {
     if (!showAnswers) return "";
     if (!Array.isArray(question.correctAnswers)) return "";
-    const selected = answers[question.id] ? Object.entries(answers[question.id]).filter(([k, v]) => v).map(([k]) => k) : [];
+    const selected = answers[question.id]
+      ? Object.entries(answers[question.id])
+          .filter(([, v]) => v)
+          .map(([k]) => k)
+      : [];
     if (selected.length === 0) return "unanswered";
     const correctSet = new Set(question.correctAnswers);
-    const numCorrect = selected.filter(opt => correctSet.has(opt)).length;
-    const numIncorrect = selected.filter(opt => !correctSet.has(opt)).length;
+    const numCorrect = selected.filter((opt) => correctSet.has(opt)).length;
+    const numIncorrect = selected.filter((opt) => !correctSet.has(opt)).length;
     if (numCorrect === correctSet.size && numIncorrect === 0) return "correct";
     return "incorrect";
   }
+
   function getTextCorrectness(question, answers, textAnswersFeedback) {
     if (!showAnswers) return "";
     if (!textAnswersFeedback || !textAnswersFeedback[question.id]) return "";
-    if (typeof textAnswersFeedback[question.id].score === "undefined") return "";
-    if (textAnswersFeedback[question.id].score >= (textAnswersFeedback[question.id].maxScore || 1)) return "correct";
-    if (textAnswersFeedback[question.id].score > 0) return "partial";
+    if (
+      typeof textAnswersFeedback[question.id].score === "undefined"
+    )
+      return "";
+    const fb = textAnswersFeedback[question.id];
+    if (fb.score >= (fb.maxScore || 1)) return "correct";
+    if (fb.score > 0) return "partial";
     return "incorrect";
   }
 
   return (
     <div className="border-b border-gray-200 pb-8">
-      <h3 className="text-xl font-semibold text-gray-800 mb-2">{title}</h3>
+      <h3 className="text-xl font-semibold text-gray-800 mb-2">
+        {title}
+      </h3>
       <p className="text-gray-600 text-sm mb-6">{description}</p>
       <div className="space-y-8">
         {questions.map((question) => {
@@ -2009,49 +2645,78 @@ function ExamSection({ title, description, questions, answers, showAnswers, show
           } else if (question.type === "checkbox") {
             correctness = getCheckboxCorrectness(question, answers);
           } else if (question.type === "text") {
-            correctness = getTextCorrectness(question, answers, textAnswersFeedback);
+            correctness = getTextCorrectness(
+              question,
+              answers,
+              textAnswersFeedback
+            );
           }
+
           let borderColor = "";
           if (showAnswers) {
-            if (correctness === "correct") borderColor = "border-l-4 border-green-500";
-            else if (correctness === "incorrect") borderColor = "border-l-4 border-red-500";
-            else if (correctness === "partial") borderColor = "border-l-4 border-yellow-500";
+            if (correctness === "correct")
+              borderColor = "border-l-4 border-green-500";
+            else if (correctness === "incorrect")
+              borderColor = "border-l-4 border-red-500";
+            else if (correctness === "partial")
+              borderColor = "border-l-4 border-yellow-500";
             else borderColor = "border-l-4 border-gray-300";
           }
+
           return (
-            <div key={question.id} className={`bg-gray-50 p-6 rounded-xl ${borderColor}`}>
+            <div
+              key={question.id}
+              className={`bg-gray-50 p-6 rounded-xl ${borderColor}`}
+            >
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-start">
-                  <label className="text-gray-800 font-medium" htmlFor={question.id}>
+                  <label
+                    className="text-gray-800 font-medium"
+                    htmlFor={question.id}
+                  >
                     {question.text}
                   </label>
                   {showHints && (
-                    <div className="relative group ml-2" tabIndex={0} aria-label="Hint">
-                      <Lightbulb className="h-5 w-5 text-yellow-500 cursor-help" tabIndex={0} />
+                    <div
+                      className="relative group ml-2"
+                      tabIndex={0}
+                      aria-label="Hint"
+                    >
+                      <Lightbulb className="h-5 w-5 text-yellow-500 cursor-help" />
                       <div className="absolute left-0 top-full mt-2 w-72 bg-yellow-50 border border-yellow-200 rounded-lg p-3 shadow-lg z-10 hidden group-focus:block group-hover:block">
-                        <p className="text-sm text-yellow-800 font-medium mb-1">Hint:</p>
+                        <p className="text-sm text-yellow-800 font-medium mb-1">
+                          Hint:
+                        </p>
                         <p className="text-sm text-yellow-700">
                           {question.hint && typeof question.hint === "object"
                             ? question.hint.explanation
-                            : (typeof question.hint === "string" ? question.hint : "Think about the core concepts related to this question.")}
+                            : typeof question.hint === "string"
+                            ? question.hint
+                            : "Think about the core concepts related to this question."}
                         </p>
-                        {question.hint && typeof question.hint === "object" && question.hint.answer && (
-                          <>
-                            {!revealedHints[question.id] ? (
-                              <button
-                                className="mt-2 px-3 py-1 bg-yellow-200 text-yellow-900 rounded text-xs font-bold"
-                                onClick={() => handleRevealHint(question.id)}
-                              >
-                                Reveal Answer
-                              </button>
-                            ) : (
-                              <div className="mt-2 text-green-800 font-semibold">
-                                <span className="block text-xs text-green-600 mb-1">Answer:</span>
-                                {question.hint.answer}
-                              </div>
-                            )}
-                          </>
-                        )}
+                        {question.hint &&
+                          typeof question.hint === "object" &&
+                          question.hint.answer && (
+                            <>
+                              {!revealedHints[question.id] ? (
+                                <button
+                                  className="mt-2 px-3 py-1 bg-yellow-200 text-yellow-900 rounded text-xs font-bold"
+                                  onClick={() =>
+                                    handleRevealHint(question.id)
+                                  }
+                                >
+                                  Reveal Answer
+                                </button>
+                              ) : (
+                                <div className="mt-2 text-green-800 font-semibold">
+                                  <span className="block text-xs text-green-600 mb-1">
+                                    Answer:
+                                  </span>
+                                  {question.hint.answer}
+                                </div>
+                              )}
+                            </>
+                          )}
                       </div>
                     </div>
                   )}
@@ -2062,16 +2727,26 @@ function ExamSection({ title, description, questions, answers, showAnswers, show
                   </div>
                 )}
               </div>
+
               {question.type === "radio" && (
                 <div className="space-y-3">
                   {question.options.map((option, index) => {
                     let optionColor = "";
                     if (showAnswers) {
-                      if (question.correctAnswer === option) optionColor = "text-green-700 font-semibold";
-                      else if (answers[question.id] === option && question.correctAnswer !== option) optionColor = "text-red-700 font-semibold";
+                      if (question.correctAnswer === option)
+                        optionColor = "text-green-700 font-semibold";
+                      else if (
+                        answers[question.id] === option &&
+                        question.correctAnswer !== option
+                      )
+                        optionColor = "text-red-700 font-semibold";
                     }
                     return (
-                      <label key={index} className="flex items-start cursor-pointer group" htmlFor={`${question.id}_${index}`}>
+                      <label
+                        key={index}
+                        className="flex items-start cursor-pointer group"
+                        htmlFor={`${question.id}_${index}`}
+                      >
                         <div className="flex items-center h-5">
                           <input
                             type="radio"
@@ -2079,72 +2754,106 @@ function ExamSection({ title, description, questions, answers, showAnswers, show
                             name={question.id}
                             value={option}
                             checked={answers[question.id] === option}
-                            onChange={() => onAnswerChange(question.id, option)}
+                            onChange={() =>
+                              onAnswerChange(question.id, option)
+                            }
                             disabled={showAnswers}
                             className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                            aria-checked={answers[question.id] === option}
-                            aria-labelledby={question.id}
                           />
                         </div>
-                        <div className={`ml-3 text-gray-700 group-hover:text-gray-900 ${optionColor}`}>
+                        <div
+                          className={`ml-3 text-gray-700 group-hover:text-gray-900 ${optionColor}`}
+                        >
                           {option}
-                          {showAnswers && question.correctAnswer === option && (
-                            <span className="ml-2 text-green-600 flex items-center text-sm">
-                              <CheckCircle className="h-4 w-4 mr-1" /> Correct
-                            </span>
-                          )}
-                          {showAnswers && answers[question.id] === option && question.correctAnswer !== option && (
-                            <span className="ml-2 text-red-600 flex items-center text-sm">
-                              <XCircle className="h-4 w-4 mr-1" /> Incorrect
-                            </span>
-                          )}
+                          {showAnswers &&
+                            question.correctAnswer === option && (
+                              <span className="ml-2 text-green-600 flex items-center text-sm">
+                                <CheckCircle className="h-4 w-4 mr-1" />{" "}
+                                Correct
+                              </span>
+                            )}
+                          {showAnswers &&
+                            answers[question.id] === option &&
+                            question.correctAnswer !== option && (
+                              <span className="ml-2 text-red-600 flex items-center text-sm">
+                                <XCircle className="h-4 w-4 mr-1" />{" "}
+                                Incorrect
+                              </span>
+                            )}
                         </div>
                       </label>
                     );
                   })}
                 </div>
               )}
+
               {question.type === "checkbox" && (
                 <div className="space-y-3">
                   {question.options.map((option, index) => {
                     let optionColor = "";
                     if (showAnswers) {
-                      if (question.correctAnswers && question.correctAnswers.includes(option)) optionColor = "text-green-700 font-semibold";
-                      else if (answers[question.id]?.[option] && question.correctAnswers && !question.correctAnswers.includes(option)) optionColor = "text-red-700 font-semibold";
+                      if (
+                        question.correctAnswers &&
+                        question.correctAnswers.includes(option)
+                      ) {
+                        optionColor = "text-green-700 font-semibold";
+                      } else if (
+                        answers[question.id]?.[option] &&
+                        question.correctAnswers &&
+                        !question.correctAnswers.includes(option)
+                      ) {
+                        optionColor = "text-red-700 font-semibold";
+                      }
                     }
                     return (
-                      <label key={index} className="flex items-start cursor-pointer group" htmlFor={`${question.id}_${index}`}>
+                      <label
+                        key={index}
+                        className="flex items-start cursor-pointer group"
+                        htmlFor={`${question.id}_${index}`}
+                      >
                         <div className="flex items-center h-5">
                           <input
                             type="checkbox"
                             id={`${question.id}_${index}`}
                             name={`${question.id}_${index}`}
-                            checked={answers[question.id]?.[option] || false}
-                            onChange={() => onAnswerChange(question.id, option, true)}
+                            checked={
+                              answers[question.id]?.[option] || false
+                            }
+                            onChange={() =>
+                              onAnswerChange(question.id, option, true)
+                            }
                             disabled={showAnswers}
                             className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 rounded border-gray-300"
-                            aria-checked={answers[question.id]?.[option] || false}
-                            aria-labelledby={question.id}
                           />
                         </div>
-                        <div className={`ml-3 text-gray-700 group-hover:text-gray-900 ${optionColor}`}>
+                        <div
+                          className={`ml-3 text-gray-700 group-hover:text-gray-900 ${optionColor}`}
+                        >
                           {option}
-                          {showAnswers && question.correctAnswers && question.correctAnswers.includes(option) && (
-                            <span className="ml-2 text-green-600 flex items-center text-sm">
-                              <CheckCircle className="h-4 w-4 mr-1" /> Correct
-                            </span>
-                          )}
-                          {showAnswers && answers[question.id]?.[option] && question.correctAnswers && !question.correctAnswers.includes(option) && (
-                            <span className="ml-2 text-red-600 flex items-center text-sm">
-                              <XCircle className="h-4 w-4 mr-1" /> Incorrect
-                            </span>
-                          )}
+                          {showAnswers &&
+                            question.correctAnswers &&
+                            question.correctAnswers.includes(option) && (
+                              <span className="ml-2 text-green-600 flex items-center text-sm">
+                                <CheckCircle className="h-4 w-4 mr-1" />{" "}
+                                Correct
+                              </span>
+                            )}
+                          {showAnswers &&
+                            answers[question.id]?.[option] &&
+                            question.correctAnswers &&
+                            !question.correctAnswers.includes(option) && (
+                              <span className="ml-2 text-red-600 flex items-center text-sm">
+                                <XCircle className="h-4 w-4 mr-1" />{" "}
+                                Incorrect
+                              </span>
+                            )}
                         </div>
                       </label>
                     );
                   })}
                 </div>
               )}
+
               {question.type === "text" && (
                 <div>
                   <div className="relative">
@@ -2163,37 +2872,54 @@ function ExamSection({ title, description, questions, answers, showAnswers, show
                       }`}
                       placeholder="Type your answer here..."
                       value={answers[question.id] || ""}
-                      onChange={e => onAnswerChange(question.id, e.target.value)}
+                      onChange={(e) =>
+                        onAnswerChange(question.id, e.target.value)
+                      }
                       disabled={showAnswers}
                     />
                     {showHints && (
                       <div className="absolute top-2 right-2">
-                        <div className="relative group" tabIndex={0} aria-label="Hint">
-                          <Lightbulb className="h-5 w-5 text-yellow-500 cursor-help" tabIndex={0} />
+                        <div
+                          className="relative group"
+                          tabIndex={0}
+                          aria-label="Hint"
+                        >
+                          <Lightbulb className="h-5 w-5 text-yellow-500 cursor-help" />
                           <div className="absolute right-0 top-full mt-2 w-72 bg-yellow-50 border border-yellow-200 rounded-lg p-3 shadow-lg z-10 hidden group-focus:block group-hover:block">
-                            <p className="text-sm text-yellow-800 font-medium mb-1">Hint:</p>
-                            <p className="text-sm text-yellow-700">
-                              {question.hint && typeof question.hint === "object"
-                                ? question.hint.explanation
-                                : (typeof question.hint === "string" ? question.hint : "Answer all parts of the question. Use specific terminology. Be concise and clear.")}
+                            <p className="text-sm text-yellow-800 font-medium mb-1">
+                              Hint:
                             </p>
-                            {question.hint && typeof question.hint === "object" && question.hint.answer && (
-                              <>
-                                {!revealedHints[question.id] ? (
-                                  <button
-                                    className="mt-2 px-3 py-1 bg-yellow-200 text-yellow-900 rounded text-xs font-bold"
-                                    onClick={() => handleRevealHint(question.id)}
-                                  >
-                                    Reveal Answer
-                                  </button>
-                                ) : (
-                                  <div className="mt-2 text-green-800 font-semibold">
-                                    <span className="block text-xs text-green-600 mb-1">Answer:</span>
-                                    {question.hint.answer}
-                                  </div>
-                                )}
-                              </>
-                            )}
+                            <p className="text-sm text-yellow-700">
+                              {question.hint &&
+                              typeof question.hint === "object"
+                                ? question.hint.explanation
+                                : typeof question.hint === "string"
+                                ? question.hint
+                                : "Answer all parts of the question. Use specific terminology. Be concise and clear."}
+                            </p>
+                            {question.hint &&
+                              typeof question.hint === "object" &&
+                              question.hint.answer && (
+                                <>
+                                  {!revealedHints[question.id] ? (
+                                    <button
+                                      className="mt-2 px-3 py-1 bg-yellow-200 text-yellow-900 rounded text-xs font-bold"
+                                      onClick={() =>
+                                        handleRevealHint(question.id)
+                                      }
+                                    >
+                                      Reveal Answer
+                                    </button>
+                                  ) : (
+                                    <div className="mt-2 text-green-800 font-semibold">
+                                      <span className="block text-xs text-green-600 mb-1">
+                                        Answer:
+                                      </span>
+                                      {question.hint.answer}
+                                    </div>
+                                  )}
+                                </>
+                              )}
                           </div>
                         </div>
                       </div>
@@ -2208,26 +2934,47 @@ function ExamSection({ title, description, questions, answers, showAnswers, show
                       <span>Recommended: 100-200 words</span>
                     </div>
                   )}
-                  {showAnswers && textAnswersFeedback && textAnswersFeedback[question.id] && (
-                    <div className="mt-4 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <h4 className="font-medium text-gray-700">AI Evaluation</h4>
-                        <div className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium">
-                          Score: {textAnswersFeedback[question.id].score}/{textAnswersFeedback[question.id].maxScore}
+                  {showAnswers &&
+                    textAnswersFeedback &&
+                    textAnswersFeedback[question.id] && (
+                      <div className="mt-4 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-medium text-gray-700">
+                            AI Evaluation
+                          </h4>
+                          <div className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium">
+                            Score:{" "}
+                            {
+                              textAnswersFeedback[question.id]
+                                .score
+                            }
+                            /
+                            {
+                              textAnswersFeedback[question.id]
+                                .maxScore
+                            }
+                          </div>
                         </div>
-                      </div>
-                      <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                        <p className="font-medium text-yellow-800 mb-1">Feedback:</p>
-                        <p className="text-yellow-700">{textAnswersFeedback[question.id].feedback}</p>
-                      </div>
-                      {question.sampleAnswer && (
-                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                          <p className="font-medium text-green-800 mb-1">Sample Answer:</p>
-                          <p className="text-green-700">{question.sampleAnswer}</p>
+                        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                          <p className="font-medium text-yellow-800 mb-1">
+                            Feedback:
+                          </p>
+                          <p className="text-yellow-700">
+                            {textAnswersFeedback[question.id].feedback}
+                          </p>
                         </div>
-                      )}
-                    </div>
-                  )}
+                        {question.sampleAnswer && (
+                          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                            <p className="font-medium text-green-800 mb-1">
+                              Sample Answer:
+                            </p>
+                            <p className="text-green-700">
+                              {question.sampleAnswer}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </div>
               )}
             </div>
@@ -2251,7 +2998,9 @@ function ScoreBar({ label, score, total, color }) {
     <div>
       <div className="flex justify-between items-center mb-1">
         <span className="text-gray-600 text-sm">{label}</span>
-        <span className="text-gray-800 font-medium">{score}/{total}</span>
+        <span className="text-gray-800 font-medium">
+          {score}/{total}
+        </span>
       </div>
       <div className="w-full bg-gray-200 rounded-full h-2.5">
         <div
@@ -2286,8 +3035,12 @@ function FeatureCard({ icon: Icon, title, description, color }) {
     blue: "bg-blue-100 text-blue-600"
   };
   return (
-    <div className={`rounded-xl p-6 border ${colorClasses[color]} shadow-sm`}>
-      <div className={`p-3 rounded-full ${iconColorClasses[color]} inline-block mb-4`}>
+    <div
+      className={`rounded-xl p-6 border ${colorClasses[color]} shadow-sm`}
+    >
+      <div
+        className={`p-3 rounded-full ${iconColorClasses[color]} inline-block mb-4`}
+      >
         <Icon className="h-6 w-6" />
       </div>
       <h3 className="font-bold text-lg mb-2">{title}</h3>
@@ -2312,7 +3065,15 @@ function FeatureStep({ number, title, description }) {
 }
 
 // --- Upload Option ---
-function UploadOption({ icon: Icon, title, description, onClick, active, disabled, features }) {
+function UploadOption({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+  active,
+  disabled,
+  features
+}) {
   return (
     <button
       className={`p-6 rounded-xl border-2 text-left transition focus:outline-none ${
@@ -2324,16 +3085,33 @@ function UploadOption({ icon: Icon, title, description, onClick, active, disable
       disabled={disabled}
     >
       <div className="flex items-start">
-        <div className={`p-3 rounded-full ${active ? "bg-indigo-100" : "bg-gray-100"} mr-4`}>
-          <Icon className={`h-8 w-8 ${active ? "text-indigo-600" : "text-gray-500"}`} />
+        <div
+          className={`p-3 rounded-full ${
+            active ? "bg-indigo-100" : "bg-gray-100"
+          } mr-4`}
+        >
+          <Icon
+            className={`h-8 w-8 ${
+              active ? "text-indigo-600" : "text-gray-500"
+            }`}
+          />
         </div>
         <div>
-          <h3 className={`font-bold text-lg ${active ? "text-indigo-700" : "text-gray-800"}`}>{title}</h3>
+          <h3
+            className={`font-bold text-lg ${
+              active ? "text-indigo-700" : "text-gray-800"
+            }`}
+          >
+            {title}
+          </h3>
           <p className="text-gray-600 mt-1">{description}</p>
           {features && (
             <ul className="mt-3 space-y-1">
               {features.map((feature, index) => (
-                <li key={index} className="flex items-center text-sm text-gray-500">
+                <li
+                  key={index}
+                  className="flex items-center text-sm text-gray-500"
+                >
                   <Check className="h-4 w-4 mr-1 text-green-500" />
                   {feature}
                 </li>
@@ -2382,7 +3160,9 @@ function HistoryTab({ history }) {
         Exam History
       </h2>
       {history.length === 0 ? (
-        <div className="text-gray-500 text-center py-12">No past attempts yet.</div>
+        <div className="text-gray-500 text-center py-12">
+          No past attempts yet.
+        </div>
       ) : (
         <table className="w-full text-left">
           <thead>
@@ -2393,13 +3173,20 @@ function HistoryTab({ history }) {
             </tr>
           </thead>
           <tbody>
-            {history.slice().reverse().map((h, i) => (
-              <tr key={i} className="border-t border-gray-200">
-                <td className="py-2 px-3">{new Date(h.timestamp).toLocaleString()}</td>
-                <td className="py-2 px-3">{h.subject}</td>
-                <td className="py-2 px-3">{h.scoreBreakdown.earned}/{h.scoreBreakdown.total}</td>
-              </tr>
-            ))}
+            {history
+              .slice()
+              .reverse()
+              .map((h, i) => (
+                <tr key={i} className="border-t border-gray-200">
+                  <td className="py-2 px-3">
+                    {new Date(h.timestamp).toLocaleString()}
+                  </td>
+                  <td className="py-2 px-3">{h.subject}</td>
+                  <td className="py-2 px-3">
+                    {h.scoreBreakdown.earned}/{h.scoreBreakdown.total}
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       )}
@@ -2422,14 +3209,12 @@ function VoiceTutor({ apiKey, model, examJSON, ttsVoice }) {
 
   const recognitionRef = useRef(null);
   const endSilenceTimerRef = useRef(null);
-  const ttsUtteranceRef = useRef(null);
-  const stopRequestedRef = useRef(false);
 
-  // Support flags
-  const hasSTT = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const hasSTT =
+    typeof window !== "undefined" &&
+    (window.SpeechRecognition || window.webkitSpeechRecognition);
   const hasTTS = typeof window !== "undefined" && window.speechSynthesis;
 
-  // Kill any speaking when we start listening
   useEffect(() => {
     if (listening && hasTTS && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
@@ -2437,70 +3222,72 @@ function VoiceTutor({ apiKey, model, examJSON, ttsVoice }) {
     }
   }, [listening, hasTTS]);
 
-  // Cleanup timers / speech on unmount
   useEffect(() => {
     return () => {
-      if (endSilenceTimerRef.current) clearTimeout(endSilenceTimerRef.current);
+      if (endSilenceTimerRef.current)
+        clearTimeout(endSilenceTimerRef.current);
       if (hasTTS) window.speechSynthesis.cancel();
       if (recognitionRef.current) recognitionRef.current.stop();
     };
   }, [hasTTS]);
 
   const speak = async (text) => {
-  if (!text || muted) return;
-  try {
-    setSpeaking(true);
-
-    const res = await fetch("https://api.openai.com/v1/audio/speech", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini-tts",
-        voice: ttsVoice || DEFAULT_TTS_VOICE,
-        input: text
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || "TTS request failed");
-    }
-
-    const audioBlob = await res.blob();
-    const audioUrl = URL.createObjectURL(audioBlob);
-
-    const audio = new Audio(audioUrl);
-    audio.onended = () => setSpeaking(false);
-    audio.onerror = () => {
-      setError("Failed to play audio");
-      setSpeaking(false);
-    };
-    audio.play();
-
-  } catch (e) {
-    setError("TTS error: " + (e.message || "unknown"));
-    setSpeaking(false);
-  }
-};
-
-
-const stopSpeaking = () => {
-  setSpeaking(false);
-  if (typeof window !== "undefined") {
+    if (!text || muted) return;
     try {
-      window.speechSynthesis.cancel(); // in case old fallback triggered
-    } catch {}
-  }
-};
+      setSpeaking(true);
 
+      const res = await fetch("https://api.openai.com/v1/audio/speech", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini-tts",
+          voice: ttsVoice || DEFAULT_TTS_VOICE,
+          input: text
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || "TTS request failed");
+      }
+
+      const audioBlob = await res.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      const audio = new Audio(audioUrl);
+      audio.onended = () => setSpeaking(false);
+      audio.onerror = () => {
+        setError("Failed to play audio");
+        setSpeaking(false);
+      };
+      audio.play();
+    } catch (e) {
+      setError("TTS error: " + (e.message || "unknown"));
+      setSpeaking(false);
+    }
+  };
+
+  const stopSpeaking = () => {
+    setSpeaking(false);
+    if (typeof window !== "undefined") {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        /* ignore */
+      }
+    }
+  };
 
   const stopListening = () => {
-    stopRequestedRef.current = true;
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        /* ignore */
+      }
     }
     setListening(false);
   };
@@ -2511,16 +3298,15 @@ const stopSpeaking = () => {
       setError("This browser does not support microphone transcription.");
       return;
     }
-    // If we’re speaking now, cut it
     stopSpeaking();
 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
     recognitionRef.current = rec;
 
-    rec.lang = "en-AU";              // use AU by default; change if you want
-    rec.interimResults = true;       // we want interim
-    rec.continuous = true;           // keep going until we decide to stop
+    rec.lang = "en-AU";
+    rec.interimResults = true;
+    rec.continuous = true;
 
     let collectedFinal = "";
 
@@ -2542,7 +3328,6 @@ const stopSpeaking = () => {
       setInterim(interimStr);
       setFinalText(collectedFinal.trim());
 
-      // If user goes silent for ~900ms after last audio, auto-stop & answer
       endSilenceTimerRef.current = setTimeout(async () => {
         stopListening();
         const text = (collectedFinal || interimStr).trim();
@@ -2551,19 +3336,15 @@ const stopSpeaking = () => {
     };
 
     rec.onerror = (e) => {
-      // Abort errors are normal when we manually stop
-      if (e?.error !== "aborted") setError(`Mic error: ${e?.error || "unknown"}`);
+      if (e?.error !== "aborted")
+        setError(`Mic error: ${e?.error || "unknown"}`);
       setListening(false);
     };
 
     rec.onend = async () => {
       setListening(false);
-      // If we ended naturally (no explicit stop) and have text, respond
-      if (!stopRequestedRef.current) {
-        const text = (finalText || interim).trim();
-        if (text) await respondTo(text);
-      }
-      stopRequestedRef.current = false;
+      const text = (finalText || interim).trim();
+      if (text) await respondTo(text);
     };
 
     try {
@@ -2571,7 +3352,7 @@ const stopSpeaking = () => {
       setListening(true);
       setInterim("");
       setFinalText("");
-    } catch (e) {
+    } catch {
       setError("Microphone permission blocked or already in use.");
       setListening(false);
     }
@@ -2585,10 +3366,11 @@ const stopSpeaking = () => {
       return;
     }
     try {
-      // Build a small, focused prompt. Keep token use low.
       const contextBits = [];
       if (examJSON?.title) contextBits.push(`Title: ${examJSON.title}`);
-      const sections = Object.keys(examJSON || {}).filter(k => Array.isArray(examJSON[k]) && examJSON[k].length > 0);
+      const sections = Object.keys(examJSON || {}).filter(
+        (k) => Array.isArray(examJSON[k]) && examJSON[k].length > 0
+      );
       if (sections.length) contextBits.push(`Sections: ${sections.join(", ")}`);
 
       const prompt = [
@@ -2599,7 +3381,9 @@ const stopSpeaking = () => {
             "Use simple, clear language. Explain concepts and approaches; do NOT give away exact answers to specific exam questions. " +
             "Keep responses short (20–60 seconds) unless the user explicitly asks for more detail."
         },
-        ...(contextBits.length ? [{ role: "system", content: `Exam context: ${contextBits.join(" | ")}` }] : []),
+        ...(contextBits.length
+          ? [{ role: "system", content: `Exam context: ${contextBits.join(" | ")}` }]
+          : []),
         { role: "user", content: userText }
       ];
 
@@ -2611,10 +3395,10 @@ const stopSpeaking = () => {
         max_tokens: 280
       });
 
-      const text = data?.choices?.[0]?.message?.content?.trim() || "Sorry, I didn’t catch that.";
+      const text =
+        data?.choices?.[0]?.message?.content?.trim() ||
+        "Sorry, I didn’t catch that.";
       setAssistantText(text);
-
-      // Speak unless muted
       speak(text);
     } catch (e) {
       setAssistantText("AI request failed.");
@@ -2624,7 +3408,7 @@ const stopSpeaking = () => {
 
   const toggleMic = () => {
     if (listening) {
-      stopListening();     // when user clicks while listening, stop & respond
+      stopListening();
       const text = (finalText || interim).trim();
       if (text) respondTo(text);
     } else {
@@ -2638,25 +3422,30 @@ const stopSpeaking = () => {
       window.speechSynthesis.cancel();
       setSpeaking(false);
     }
-    setMuted(m => !m);
+    setMuted((m) => !m);
   };
 
-  // Floating button + small slide-out panel
   return (
     <>
-      {/* Floating circular mic button */}
       <div className="fixed bottom-6 right-6 z-40">
         <button
-          onClick={() => setPanelOpen(p => !p)}
-          className={`rounded-full shadow-xl p-4 border-2 ${panelOpen ? "bg-indigo-600 border-indigo-700" : "bg-white border-indigo-200"} transition`}
+          onClick={() => setPanelOpen((p) => !p)}
+          className={`rounded-full shadow-xl p-4 border-2 ${
+            panelOpen
+              ? "bg-indigo-600 border-indigo-700"
+              : "bg-white border-indigo-200"
+          } transition`}
           aria-label="Open Voice Tutor"
           title="Voice Tutor"
         >
-          <Mic className={`h-6 w-6 ${panelOpen ? "text-white" : "text-indigo-700"}`} />
+          <Mic
+            className={`h-6 w-6 ${
+              panelOpen ? "text-white" : "text-indigo-700"
+            }`}
+          />
         </button>
       </div>
 
-      {/* Panel */}
       {panelOpen && (
         <div className="fixed bottom-24 right-6 w-[360px] max-h-[70vh] bg-white rounded-2xl shadow-2xl border border-indigo-100 z-40 flex flex-col overflow-hidden">
           <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
@@ -2670,7 +3459,11 @@ const stopSpeaking = () => {
                 className="bg-white/15 hover:bg-white/25 rounded-lg p-1.5"
                 title={muted ? "Unmute" : "Mute"}
               >
-                {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                {muted ? (
+                  <VolumeX className="h-5 w-5" />
+                ) : (
+                  <Volume2 className="h-5 w-5" />
+                )}
               </button>
               <button
                 onClick={() => setPanelOpen(false)}
@@ -2685,12 +3478,14 @@ const stopSpeaking = () => {
           <div className="p-4 space-y-3 overflow-y-auto">
             {!hasSTT && (
               <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">
-                Your browser doesn’t support speech recognition. Try Chrome on desktop.
+                Your browser doesn’t support speech recognition. Try Chrome on
+                desktop.
               </div>
             )}
             {!hasTTS && (
               <div className="bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg p-3 text-sm">
-                Speech synthesis isn’t available. I can still transcribe and type answers.
+                Speech synthesis isn’t available. I can still transcribe and
+                type answers.
               </div>
             )}
             {error && (
@@ -2702,14 +3497,22 @@ const stopSpeaking = () => {
             <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
               <div className="text-xs text-gray-500 mb-1">You said</div>
               <div className="min-h-[48px] whitespace-pre-wrap text-gray-800">
-                {finalText || interim || <span className="text-gray-400">Press the mic and ask a question…</span>}
+                {finalText || interim || (
+                  <span className="text-gray-400">
+                    Press the mic and ask a question…
+                  </span>
+                )}
               </div>
             </div>
 
             <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100">
               <div className="text-xs text-indigo-700 mb-1">Tutor</div>
               <div className="min-h-[64px] whitespace-pre-wrap text-indigo-900">
-                {assistantText || <span className="text-indigo-400">I’ll answer here (and speak if not muted).</span>}
+                {assistantText || (
+                  <span className="text-indigo-400">
+                    I’ll answer here (and speak if not muted).
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -2718,11 +3521,19 @@ const stopSpeaking = () => {
             <div className="flex items-center space-x-2">
               <button
                 onClick={toggleMic}
-                className={`px-4 py-2 rounded-lg font-medium shadow ${listening ? "bg-red-600 hover:bg-red-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
+                className={`px-4 py-2 rounded-lg font-medium shadow ${
+                  listening
+                    ? "bg-red-600 hover:bg-red-700 text-white"
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                }`}
                 title={listening ? "Stop & Answer" : "Start Listening"}
               >
                 <span className="inline-flex items-center">
-                  {listening ? <MicOff className="h-5 w-5 mr-2" /> : <Mic className="h-5 w-5 mr-2" />}
+                  {listening ? (
+                    <MicOff className="h-5 w-5 mr-2" />
+                  ) : (
+                    <Mic className="h-5 w-5 mr-2" />
+                  )}
                   {listening ? "Stop" : "Listen"}
                 </span>
               </button>
@@ -2753,7 +3564,11 @@ const stopSpeaking = () => {
                 className="px-3 py-2 rounded-lg bg-white hover:bg-gray-50 text-gray-700 border border-gray-300"
                 title={speaking ? "Pause voice" : "Play voice"}
               >
-                {speaking ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                {speaking ? (
+                  <Pause className="h-5 w-5" />
+                ) : (
+                  <Play className="h-5 w-5" />
+                )}
               </button>
             </div>
           </div>
@@ -2762,7 +3577,6 @@ const stopSpeaking = () => {
     </>
   );
 }
-
 
 // --- Send Icon ---
 function Send(props) {
@@ -2799,7 +3613,6 @@ function AITutorChat({ apiKey, model, examJSON }) {
   const chatBottomRef = useRef(null);
   const [popupContent, setPopupContent] = useState(null);
 
-  // Scroll to bottom on new message
   useEffect(() => {
     if (chatBottomRef.current) {
       chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
@@ -2811,7 +3624,7 @@ function AITutorChat({ apiKey, model, examJSON }) {
     setIsSending(true);
     setError("");
     const userMsg = { role: "user", content: input };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMsg]);
     setInput("");
 
     try {
@@ -2825,9 +3638,13 @@ function AITutorChat({ apiKey, model, examJSON }) {
             "If the user asks about a specific question, help them understand the concept or how to approach it, but do not provide the answer. " +
             "Exam context: " +
             (examJSON?.title ? `Title: ${examJSON.title}. ` : "") +
-            `Sections: ${Object.keys(examJSON || {}).filter(k => Array.isArray(examJSON[k]) && examJSON[k].length > 0).join(", ")}.`
+            `Sections: ${Object.keys(examJSON || {})
+              .filter(
+                (k) => Array.isArray(examJSON[k]) && examJSON[k].length > 0
+              )
+              .join(", ")}.`
         },
-        ...messages.slice(-10), // last 10 messages for context
+        ...messages.slice(-10),
         userMsg
       ];
 
@@ -2840,7 +3657,7 @@ function AITutorChat({ apiKey, model, examJSON }) {
       });
 
       const response = data.choices[0].message.content.trim();
-      setMessages(prev => [...prev, { role: "assistant", content: response }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: response }]);
     } catch (e) {
       setError(e.message || "Failed to get response from AI tutor.");
     }
@@ -2873,15 +3690,14 @@ function AITutorChat({ apiKey, model, examJSON }) {
                   : undefined
               }
               tabIndex={msg.role === "assistant" ? 0 : undefined}
-              style={msg.role === "assistant" ? { outline: "none" } : undefined}
               onKeyDown={
                 msg.role === "assistant"
                   ? (e) => {
-                      if (e.key === "Enter" || e.key === " ") setPopupContent(msg.content);
+                      if (e.key === "Enter" || e.key === " ")
+                        setPopupContent(msg.content);
                     }
                   : undefined
               }
-              aria-label={msg.role === "assistant" ? "Show full response" : undefined}
             >
               {msg.content}
             </div>
@@ -2894,7 +3710,7 @@ function AITutorChat({ apiKey, model, examJSON }) {
             placeholder="Ask a question about the exam..."
             className="flex-1 border border-gray-300 rounded-l-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500"
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleInputKeyDown}
             disabled={isSending}
           />
@@ -2954,7 +3770,8 @@ function AccessibleMenu({ label, options, onSelect, disabled }) {
     } else {
       document.removeEventListener("mousedown", handleClickOutside);
     }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () =>
+      document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
   return (
@@ -2966,9 +3783,13 @@ function AccessibleMenu({ label, options, onSelect, disabled }) {
         aria-expanded={open}
         aria-controls="practice-type-menu"
         disabled={disabled}
-        onClick={() => setOpen(o => !o)}
-        onKeyDown={e => {
-          if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (
+            e.key === "ArrowDown" ||
+            e.key === "Enter" ||
+            e.key === " "
+          ) {
             e.preventDefault();
             setOpen(true);
             setTimeout(() => {
@@ -2989,7 +3810,7 @@ function AccessibleMenu({ label, options, onSelect, disabled }) {
           className="absolute z-10 bg-white border border-gray-200 rounded shadow-lg mt-2 min-w-[180px]"
           role="menu"
         >
-          {options.map((opt, idx) => (
+          {options.map((opt) => (
             <button
               key={opt.value}
               className="block w-full text-left px-4 py-2 hover:bg-indigo-50 focus:bg-indigo-100"
@@ -2999,7 +3820,7 @@ function AccessibleMenu({ label, options, onSelect, disabled }) {
                 onSelect(opt.value);
                 setOpen(false);
               }}
-              onKeyDown={e => {
+              onKeyDown={(e) => {
                 if (e.key === "Escape") setOpen(false);
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
@@ -3022,6 +3843,7 @@ function AccessibleMenu({ label, options, onSelect, disabled }) {
     </div>
   );
 }
+
 // --- Practice Question View ---
 function PracticeQuestionView({
   questions,
@@ -3040,15 +3862,39 @@ function PracticeQuestionView({
   practiceHistory = []
 }) {
   const q = questions[currentIndex];
-  // Find history for this question (by id or text)
+
   const thisHistory = practiceHistory.filter(
-    h =>
-      (q && h.question && (h.question.id === q.id || h.question.text === q.text))
+    (h) =>
+      q &&
+      h.question &&
+      (h.question.id === q.id || h.question.text === q.text)
   );
+
+  const hasAnswer = (() => {
+    if (!q) return false;
+    const hasOptions = Array.isArray(q.options) && q.options.length > 0;
+    if (hasOptions) {
+      if (q.type === "checkbox") {
+        return (
+          answer &&
+          typeof answer === "object" &&
+          Object.values(answer).some(Boolean)
+        );
+      }
+      return !!answer;
+    }
+    if (typeof answer === "string") {
+      return answer.trim().length > 0;
+    }
+    return false;
+  })();
+
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-xl p-8 border border-indigo-100">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-indigo-700">Practice Mode</h2>
+        <h2 className="text-xl font-bold text-indigo-700">
+          Practice Mode
+        </h2>
         <div className="text-gray-500 text-sm">
           Question {currentIndex + 1} of {questions.length}
         </div>
@@ -3060,7 +3906,10 @@ function PracticeQuestionView({
             {q.options && q.options.length > 0 && (
               <div className="space-y-2">
                 {q.options.map((opt, i) => (
-                  <label key={i} className="flex items-center space-x-2">
+                  <label
+                    key={i}
+                    className="flex items-center space-x-2"
+                  >
                     <input
                       type={q.type === "checkbox" ? "checkbox" : "radio"}
                       name="practice"
@@ -3070,9 +3919,9 @@ function PracticeQuestionView({
                           ? (answer && answer[opt]) || false
                           : answer === opt
                       }
-                      onChange={e => {
+                      onChange={() => {
                         if (q.type === "checkbox") {
-                          setAnswer(prev => ({
+                          setAnswer((prev) => ({
                             ...(typeof prev === "object" && prev ? prev : {}),
                             [opt]: !prev?.[opt]
                           }));
@@ -3087,73 +3936,169 @@ function PracticeQuestionView({
                 ))}
               </div>
             )}
-            {(q.type === "shortAnswer" || q.type === "text" || (!q.options || q.options.length === 0)) && (
+            {(q.type === "shortAnswer" ||
+              q.type === "text" ||
+              (!q.options || q.options.length === 0)) && (
               <textarea
                 className="w-full border border-gray-300 rounded-lg p-3 mt-2"
                 rows={4}
                 placeholder="Type your answer here..."
                 value={typeof answer === "string" ? answer : ""}
-                onChange={e => setAnswer(e.target.value)}
+                onChange={(e) => setAnswer(e.target.value)}
                 disabled={!!feedback}
               />
             )}
           </div>
+
           <div className="flex flex-wrap gap-2 mb-4">
-            {/* ... */}
+            <button
+              type="button"
+              onClick={onCheck}
+              disabled={isProcessing || !hasAnswer}
+              className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium shadow ${
+                isProcessing || !hasAnswer
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+              }`}
+            >
+              <CheckCircle className="h-4 w-4 mr-1" />
+              Check with AI
+            </button>
+            <button
+              type="button"
+              onClick={onSimilar}
+              disabled={isProcessing}
+              className="inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+            >
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Similar Question
+            </button>
+            <button
+              type="button"
+              onClick={onDifferent}
+              disabled={isProcessing || questions.length <= 1}
+              className="inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200"
+            >
+              <Compass className="h-4 w-4 mr-1" />
+              Different Question
+            </button>
+            <AccessibleMenu
+              label="Request Question"
+              options={[
+                { value: "multipleChoice", label: "Multiple choice" },
+                { value: "trueFalse", label: "True / False" },
+                { value: "checkbox", label: "Multi-select" },
+                { value: "shortAnswer", label: "Short answer" },
+                { value: "essay", label: "Essay-style" }
+              ]}
+              onSelect={onRequestType}
+              disabled={isProcessing}
+            />
           </div>
+
           {isProcessing && (
-            <div className="text-indigo-600 font-medium mb-2">Processing…</div>
+            <div className="text-indigo-600 font-medium mb-2">
+              Processing…
+            </div>
           )}
+
           {feedback && (
             <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mt-4">
               {typeof feedback === "string" ? (
                 <div>{feedback}</div>
               ) : (
                 <div>
-                  <div className="mb-2 font-medium text-indigo-700">Breakdown:</div>
+                  <div className="mb-2 font-medium text-indigo-700">
+                    Breakdown:
+                  </div>
                   <ul className="mb-2">
                     {feedback.breakdown?.map((pt, i) => (
-                      <li key={i} className={pt.achieved ? "text-green-700" : "text-red-700"}>
+                      <li
+                        key={i}
+                        className={
+                          pt.achieved ? "text-green-700" : "text-red-700"
+                        }
+                      >
                         {pt.achieved ? "✔️" : "❌"} {pt.point}
                       </li>
                     ))}
                   </ul>
                   <div className="mb-2">
-                    <span className="font-bold">Score:</span> {feedback.score}
+                    <span className="font-bold">Score:</span>{" "}
+                    {feedback.score}
                   </div>
                   <div>
-                    <span className="font-bold">Feedback:</span> {feedback.feedback}
+                    <span className="font-bold">Feedback:</span>{" "}
+                    {feedback.feedback}
                   </div>
                 </div>
               )}
             </div>
           )}
+
+          <div className="flex justify-between items-center mt-6">
+            <button
+              type="button"
+              onClick={onPrev}
+              disabled={questions.length <= 1}
+              className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium border ${
+                questions.length <= 1
+                  ? "text-gray-400 border-gray-200 cursor-not-allowed"
+                  : "text-gray-700 border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={onNext}
+              disabled={questions.length <= 1}
+              className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium border ${
+                questions.length <= 1
+                  ? "text-gray-400 border-gray-200 cursor-not-allowed"
+                  : "text-gray-700 border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </button>
+          </div>
+
           {thisHistory.length > 0 && (
             <div className="mt-6">
-              <div className="font-semibold text-gray-700 mb-2">Your Previous Attempts:</div>
+              <div className="font-semibold text-gray-700 mb-2">
+                Your Previous Attempts:
+              </div>
               <ul className="space-y-2">
-                {thisHistory.slice(-3).reverse().map((h, idx) => (
-                  <li key={idx} className="bg-gray-50 border border-gray-200 rounded p-2 text-sm">
-                    <div>
-                      <span className="font-bold">Your Answer:</span>{" "}
-                      {typeof h.answer === "object"
-                        ? Object.entries(h.answer)
-                            .filter(([, v]) => v)
-                            .map(([k]) => k)
-                            .join(", ")
-                        : h.answer}
-                    </div>
-                    <div>
-                      <span className="font-bold">Feedback:</span>{" "}
-                      {typeof h.feedback === "string"
-                        ? h.feedback
-                        : h.feedback?.feedback}
-                    </div>
-                    <div className="text-gray-400 text-xs">
-                      {new Date(h.timestamp).toLocaleString()}
-                    </div>
-                  </li>
-                ))}
+                {thisHistory
+                  .slice(-3)
+                  .reverse()
+                  .map((h, idx) => (
+                    <li
+                      key={idx}
+                      className="bg-gray-50 border border-gray-200 rounded p-2 text-sm"
+                    >
+                      <div>
+                        <span className="font-bold">Your Answer:</span>{" "}
+                        {typeof h.answer === "object"
+                          ? Object.entries(h.answer)
+                              .filter(([, v]) => v)
+                              .map(([k]) => k)
+                              .join(", ")
+                          : h.answer}
+                      </div>
+                      <div>
+                        <span className="font-bold">Feedback:</span>{" "}
+                        {typeof h.feedback === "string"
+                          ? h.feedback
+                          : h.feedback?.feedback}
+                      </div>
+                      <div className="text-gray-400 text-xs">
+                        {new Date(h.timestamp).toLocaleString()}
+                      </div>
+                    </li>
+                  ))}
               </ul>
             </div>
           )}
