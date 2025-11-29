@@ -1110,19 +1110,21 @@ const handleResetSession = () => {
 
         {settingsOpen && (
           <SettingsModal
-            apiKey={apiKey}
-            setApiKey={setApiKey}
-            model={model}
-            setModel={setModel}
-            saveKey={saveKey}
-            setSaveKey={setSaveKey}
-            onClose={() => setSettingsOpen(false)}
-            onSave={handleSaveSettings}
-            onDeleteKey={handleDeleteKey}
-            settingsSaved={settingsSaved}
-            tokenUsage={tokenUsage}
-            onResetSession={handleResetSession}
-          />
+  apiKey={apiKey}
+  setApiKey={setApiKey}
+  model={model}
+  setModel={setModel}
+  ttsVoice={ttsVoice}
+  setTtsVoice={setTtsVoice}
+  saveKey={saveKey}
+  setSaveKey={setSaveKey}
+  onClose={() => setSettingsOpen(false)}
+  onSave={handleSaveSettings}
+  onDeleteKey={handleDeleteKey}
+  settingsSaved={settingsSaved}
+  tokenUsage={tokenUsage}
+  onResetSession={handleResetSession}
+/>
         )}
 
         <div className="flex justify-between mb-4">
@@ -1416,7 +1418,7 @@ const handleResetSession = () => {
 
 // --- Settings Modal ---
 function SettingsModal({
-  apiKey, setApiKey, model, setModel, saveKey, setSaveKey,
+  apiKey, setApiKey, model, setModel, ttsVoice, setTtsVoice, saveKey, setSaveKey,
   onClose, onSave, onDeleteKey, settingsSaved, tokenUsage, onResetSession
 }) {
   return (
