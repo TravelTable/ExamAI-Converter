@@ -340,17 +340,13 @@ function hashString(str) {
 // --- Main Container ---
 export default function ExamAIConverterContainer() {
   // --- Settings State ---
-// --- Settings State ---
-const [settingsOpen, setSettingsOpen] = useState(false);
-const [apiKey, setApiKey] = useState("");
-const [model, setModel] = useState(DEFAULT_MODEL);
-const [ttsVoice, setTtsVoice] = useState(DEFAULT_TTS_VOICE);
-const [saveKey, setSaveKey] = useState(false);
-const [settingsSaved, setSettingsSaved] = useState(false);
-const [settingsBanner, setSettingsBanner] = useState(false);
-
-
-  // --- Token Usage State ---
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState(DEFAULT_MODEL);
+  const [ttsVoice, setTtsVoice] = useState(DEFAULT_TTS_VOICE);
+  const [saveKey, setSaveKey] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsBanner, setSettingsBanner] = useState(false);
   const [tokenUsage, setTokenUsage] = useState({ session: 0, actions: [] });
 
   // --- Exam State ---
@@ -367,6 +363,25 @@ const [settingsBanner, setSettingsBanner] = useState(false);
   const [helpPanelOpen, setHelpPanelOpen] = useState(false);
   const [activeHelpTool, setActiveHelpTool] = useState(null);
   const [showHints, setShowHints] = useState(false);
+
+  // --- Adaptive Practice State ---
+  const [practiceMode, setPracticeMode] = useState(false);
+  const [practiceQuestions, setPracticeQuestions] = useState([]); // [{question, type, sourceExam}]
+  const [currentPracticeIndex, setCurrentPracticeIndex] = useState(0);
+  const [practiceAnswer, setPracticeAnswer] = useState("");
+  const [practiceFeedback, setPracticeFeedback] = useState(null);
+  const [practiceOptions, setPracticeOptions] = useState({
+    type: "any", // "any", "multipleChoice", "shortAnswer", etc.
+    difficulty: "any"
+  });
+  // --- Practice History State ---
+  const [practiceHistory, setPracticeHistory] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("practiceHistory") || "[]");
+    } catch {
+      return [];
+    }
+  });
 
   // --- Timer/Progress State ---
   const [timer, setTimer] = useState(60 * 60); // seconds
@@ -415,7 +430,7 @@ useEffect(() => {
   } else {
     localStorage.setItem(
       LOCAL_STORAGE_KEY,
-      JSON.stringify({ model, ttsVoice, saveKey })
+      JSON.stringify({ model, ttsVoice, saveKey: false })
     );
     setSettingsSaved(false);
   }
@@ -641,6 +656,32 @@ useEffect(() => {
       setTimer(suggestedTime);
       setTimerActive(true);
       setSessionHash(hashString(JSON.stringify(exam)));
+
+      // --- Adaptive Practice Mode: Extract single questions for practice ---
+      // Gather all questions from this and similar exams in history
+      const allQuestions = [];
+      // Current exam
+      ["multipleChoice", "trueFalse", "checkbox", "shortAnswer"].forEach(type => {
+        (exam[type] || []).forEach(q => allQuestions.push({ ...q, type, sourceExam: exam }));
+      });
+      // Similar exams from history (if any)
+      const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+      hist.forEach(h => {
+        if (h.examJSON) {
+          ["multipleChoice", "trueFalse", "checkbox", "shortAnswer"].forEach(type => {
+            (h.examJSON[type] || []).forEach(q => allQuestions.push({ ...q, type, sourceExam: h.examJSON }));
+          });
+        }
+      });
+      // Shuffle and pick one for practice
+      if (allQuestions.length > 0) {
+        const shuffled = allQuestions.sort(() => Math.random() - 0.5);
+        setPracticeQuestions(shuffled);
+        setCurrentPracticeIndex(0);
+        setPracticeMode(true);
+        setPracticeAnswer("");
+        setPracticeFeedback(null);
+      }
     } catch (e) {
       setError(e.message || "Failed to process exam.");
     }
@@ -972,7 +1013,7 @@ const handleSaveSettings = () => {
   } else {
     localStorage.setItem(
       LOCAL_STORAGE_KEY,
-      JSON.stringify({ model, ttsVoice, saveKey })
+      JSON.stringify({ model, ttsVoice, saveKey: false })
     );
     setSettingsSaved(false);
   }
@@ -995,7 +1036,7 @@ const handleResetSession = () => {
 };
 
 
-  // --- UI ---
+   // --- UI ---
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-white">
       <header className="bg-gradient-to-r from-indigo-700 to-purple-700 text-white py-6 shadow-lg">
@@ -1027,6 +1068,11 @@ const handleResetSession = () => {
                   setShowHints(false);
                   setError("");
                   setHistoryTab(false);
+                  setPracticeMode(false);
+                  setPracticeQuestions([]);
+                  setCurrentPracticeIndex(0);
+                  setPracticeAnswer("");
+                  setPracticeFeedback(null);
                 }}
                 style={{ background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer" }}
                 type="button"
@@ -1108,170 +1154,224 @@ const handleResetSession = () => {
 
         {historyTab ? (
           <HistoryTab history={history} />
+        ) : practiceMode ? (
+          <>
+            <div className="mb-4 flex justify-end">
+              <button
+                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium border border-gray-300 hover:bg-gray-200"
+                onClick={() => setPracticeMode(false)}
+              >
+                Return to Full Exam
+              </button>
+            </div>
+            <PracticeQuestionView
+              questions={practiceQuestions}
+              currentIndex={currentPracticeIndex}
+              answer={practiceAnswer}
+              setAnswer={setPracticeAnswer}
+              feedback={practiceFeedback}
+              setFeedback={setPracticeFeedback}
+              onNext={() => {
+                setPracticeFeedback(null);
+                setPracticeAnswer("");
+                setCurrentPracticeIndex(i => (i + 1) % practiceQuestions.length);
+              }}
+              onPrev={() => {
+                setPracticeFeedback(null);
+                setPracticeAnswer("");
+                setCurrentPracticeIndex(i => (i - 1 + practiceQuestions.length) % practiceQuestions.length);
+            }}
+           onCheck={async () => {
+              const q = practiceQuestions[currentPracticeIndex];
+              if (!q) return;
+              setIsProcessing(true);
+              setPracticeFeedback(null);
+              let feedbackResult = null;
+              let feedbackType = "objective";
+              try {
+                if (q.type === "multipleChoice" || q.type === "trueFalse" || q.type === "checkbox") {
+                  // For objective: AI says yes/no and gives reasoning
+                  const prompt = [
+                    {
+                      role: "system",
+                      content:
+                        "You are an expert exam tutor. Given a question, options, and a user's answer, say 'Yes' if correct, 'No' if not. For multiple choice, explain why the answer is correct or not. For checkbox, explain which options are correct. For true/false, explain."
+                    },
+                    {
+                      role: "user",
+                      content: `Question: ${q.text}\nOptions: ${(q.options || []).join(", ")}\nUser Answer: ${practiceAnswer}\nCorrect Answer(s): ${q.correctAnswer || q.correctAnswers || ""}`
+                    }
+                  ];
+                  const data = await callOpenAI({
+                    apiKey,
+                    model,
+                    messages: prompt,
+                    temperature: 0.2,
+                    max_tokens: 128
+                  });
+                  feedbackResult = data.choices[0].message.content.trim();
+                  setPracticeFeedback(feedbackResult);
+                } else if (q.type === "shortAnswer" || q.type === "text") {
+                  // For written: AI breaks down and marks
+                  const prompt = [
+                    {
+                      role: "system",
+                      content:
+                        "You are an expert exam marker. Given a question and a user's answer, break the answer into key points, mark each, and give a total mark out of the question's points. Return JSON: { breakdown: [ { point: string, achieved: boolean } ], score: int, feedback: string }"
+                    },
+                    {
+                      role: "user",
+                      content: `Question: ${q.text}\nPoints: ${q.points || 1}\nUser Answer: ${practiceAnswer}\nSample Answer: ${q.sampleAnswer || ""}`
+                    }
+                  ];
+                  const data = await callOpenAI({
+                    apiKey,
+                    model,
+                    messages: prompt,
+                    temperature: 0.2,
+                    max_tokens: 256
+                  });
+                  let parsed;
+                  try {
+                    parsed = robustLLMJsonParse(data.choices[0].message.content);
+                  } catch {
+                    // Try to extract JSON substring
+                    let content = data.choices[0].message.content;
+                    let jsonStr = content.match(/\{[\s\S]*\}/);
+                    if (jsonStr) {
+                      try {
+                        parsed = JSON.parse(jsonStr[0]);
+                      } catch {
+                        setPracticeFeedback("Could not parse AI feedback.");
+                        setIsProcessing(false);
+                        return;
+                      }
+                    } else {
+                      setPracticeFeedback("Could not parse AI feedback.");
+                      setIsProcessing(false);
+                      return;
+                    }
+                  }
+                  feedbackResult = parsed;
+                  feedbackType = "written";
+                  setPracticeFeedback(parsed);
+                }
+                // Save to practice history
+                const historyEntry = {
+                  timestamp: Date.now(),
+                  question: q,
+                  answer: practiceAnswer,
+                  feedback: feedbackResult,
+                  feedbackType
+                };
+                setPracticeHistory(prev => {
+                  const updated = [...prev, historyEntry];
+                  localStorage.setItem("practiceHistory", JSON.stringify(updated));
+                  return updated;
+                });
+              } catch (e) {
+                setPracticeFeedback("AI error: " + (e.message || "unknown"));
+              }
+              setIsProcessing(false);
+            }}
+            onSimilar={async () => {
+              // Request a similar question from AI
+              const q = practiceQuestions[currentPracticeIndex];
+              setIsProcessing(true);
+              try {
+                const prompt = [
+                  {
+                    role: "system",
+                    content:
+                      "You are an expert exam generator. Given a question, generate a similar question of the same type and difficulty. Return JSON: { text: string, options: array (if applicable), type: string, points: int, sampleAnswer: string (if applicable) }"
+                  },
+                  {
+                    role: "user",
+                    content: `Question: ${q.text}\nType: ${q.type}\nOptions: ${(q.options || []).join(", ")}`
+                  }
+                ];
+                const data = await callOpenAI({
+                  apiKey,
+                  model,
+                  messages: prompt,
+                  temperature: 0.3,
+                  max_tokens: 256
+                });
+                let newQ;
+                try {
+                  newQ = robustLLMJsonParse(data.choices[0].message.content);
+                } catch {
+                  setIsProcessing(false);
+                  return;
+                }
+                setPracticeQuestions(prev => [
+                  ...prev.slice(0, currentPracticeIndex + 1),
+                  newQ,
+                  ...prev.slice(currentPracticeIndex + 1)
+                ]);
+                setCurrentPracticeIndex(i => i + 1);
+                setPracticeAnswer("");
+                setPracticeFeedback(null);
+              } catch (e) {
+                setPracticeFeedback("AI error: " + (e.message || "unknown"));
+              }
+              setIsProcessing(false);
+            }}
+            onDifferent={async () => {
+              // Request a different question (random from pool)
+              if (practiceQuestions.length > 1) {
+                setCurrentPracticeIndex(i => (i + 1) % practiceQuestions.length);
+                setPracticeAnswer("");
+                setPracticeFeedback(null);
+              }
+            }}
+            onRequestType={async (type) => {
+              // Request a question of a specific type
+              setIsProcessing(true);
+              try {
+                const prompt = [
+                  {
+                    role: "system",
+                    content:
+                      "You are an expert exam generator. Generate a question of the requested type (multiple choice, short answer, etc) on the same subject as the uploaded exam. Return JSON: { text: string, options: array (if applicable), type: string, points: int, sampleAnswer: string (if applicable) }"
+                  },
+                  {
+                    role: "user",
+                    content: `Type: ${type}\nSubject: ${examJSON?.title || "General"}`
+                  }
+                ];
+                const data = await callOpenAI({
+                  apiKey,
+                  model,
+                  messages: prompt,
+                  temperature: 0.3,
+                  max_tokens: 256
+                });
+                let newQ;
+                try {
+                  newQ = robustLLMJsonParse(data.choices[0].message.content);
+                } catch {
+                  setIsProcessing(false);
+                  return;
+                }
+                setPracticeQuestions(prev => [
+                  ...prev.slice(0, currentPracticeIndex + 1),
+                  newQ,
+                  ...prev.slice(currentPracticeIndex + 1)
+                ]);
+                setCurrentPracticeIndex(i => i + 1);
+                setPracticeAnswer("");
+                setPracticeFeedback(null);
+              } catch (e) {
+                setPracticeFeedback("AI error: " + (e.message || "unknown"));
+              }
+              setIsProcessing(false);
+            }}
+            isProcessing={isProcessing}
+          />
         ) : !examJSON ? (
           <div className="max-w-4xl mx-auto">
-            <div className="bg-white rounded-xl shadow-xl p-8 mb-8 border border-indigo-100">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center">
-                <Upload className="h-6 w-6 mr-2 text-indigo-600" />
-                Upload Your Exam
-              </h2>
-              <p className="text-gray-600 mb-8 text-lg">
-                Upload a photo of your exam or paste the exam text to convert it into an interactive online format with AI-powered grading.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <UploadOption
-                  icon={Image}
-                  title="Upload Image"
-                  description="Take a photo or upload an image of your exam paper"
-                  onClick={() => handleUpload("image")}
-                  active={uploadType === "image"}
-                  disabled={isProcessing}
-                  features={["Supports JPG, PNG, PDF", "OCR text recognition", "Preserves formatting"]}
-                />
-                <UploadOption
-                  icon={FileText}
-                  title="Paste Text"
-                  description="Copy and paste your exam text from any document"
-                  onClick={() => handleUpload("text")}
-                  active={uploadType === "text"}
-                  disabled={isProcessing}
-                  features={["Fast processing", "Supports rich text", "Maintains structure"]}
-                />
-              </div>
-              {uploadType === "image" && (
-                <div className="mt-8 border-2 border-dashed border-indigo-300 rounded-xl p-10 text-center bg-indigo-50">
-                  <Upload className="h-16 w-16 text-indigo-400 mx-auto mb-4" />
-                  <p className="text-gray-600 mb-4 text-lg">Drag and drop your exam image here, or click to browse</p>
-                  <div className="flex justify-center">
-                    <button
-                      className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition shadow-md flex items-center text-lg font-medium"
-                      onClick={() => fileInputRef.current.click()}
-                      disabled={isProcessing}
-                    >
-                      <Image className="h-5 w-5 mr-2" />
-                      Select Image
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".png,.jpg,.jpeg,.pdf"
-                      className="hidden"
-                      onChange={handleFileInput}
-                    />
-                  </div>
-                  {ocrFileName && (
-                    <div className="mt-2 text-gray-700 text-sm">Selected: {ocrFileName}</div>
-                  )}
-                  <p className="text-gray-500 mt-4 text-sm">Supported formats: JPG, PNG, PDF (up to 10MB)</p>
-                  {isProcessing && (
-                    <div className="mt-6 text-center">
-                      <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-b-4 border-indigo-600 mx-auto mb-2"></div>
-                      <p className="text-gray-600">Extracting text…</p>
-                    </div>
-                  )}
-                  {ocrText && !isProcessing && (
-                    <div className="mt-6">
-                      <label className="block text-gray-700 mb-2 text-lg font-medium">Preview and edit extracted text:</label>
-                      <textarea
-                        className="w-full h-64 border border-gray-300 rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-700 shadow-inner bg-white"
-                        value={ocrText}
-                        onChange={e => setOcrText(e.target.value)}
-                      />
-                      <button
-                        className="mt-4 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition shadow-md flex items-center text-lg font-medium"
-                        onClick={handleProcessExam}
-                        disabled={isProcessing}
-                      >
-                        <Zap className="h-5 w-5 mr-2" />
-                        Process Exam
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-              {uploadType === "text" && (
-                <div className="mt-8">
-                  <label className="block text-gray-700 mb-2 text-lg font-medium">Paste your exam text below:</label>
-                  <textarea
-                    className="w-full h-64 border border-gray-300 rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-700 shadow-inner bg-white"
-                    placeholder="Paste your exam questions and answers here. Include all instructions, questions, and answer choices..."
-                    value={rawText}
-                    onChange={e => setRawText(e.target.value)}
-                  />
-                  <div className="mt-4 flex justify-between items-center">
-                    <div className="text-gray-500 text-sm">
-                      <p className="flex items-center"><Check className="h-4 w-4 mr-1 text-green-500" /> Supports multiple question types</p>
-                      <p className="flex items-center"><Check className="h-4 w-4 mr-1 text-green-500" /> Preserves formatting</p>
-                    </div>
-                    <button
-                      className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition shadow-md flex items-center text-lg font-medium"
-                      onClick={handleProcessExam}
-                      disabled={isProcessing}
-                    >
-                      <Zap className="h-5 w-5 mr-2" />
-                      Process Exam
-                    </button>
-                  </div>
-                </div>
-              )}
-              {isProcessing && (
-                <div className="mt-8 text-center py-10">
-                  <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600 mx-auto mb-6"></div>
-                  <p className="text-gray-600 text-xl">All processing happens locally in your browser. Your API key is stored only on this device if you choose.</p>
-                  <p className="text-gray-500 mt-2">OCR (browser) → LLM structuring → local render → local grading or LLM short-answer grading → optional LLM exam generation.</p>
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <FeatureCard
-                icon={BookOpen}
-                title="Multiple Exam Formats"
-                description="Supports multiple choice, true/false, checkbox, and short answer questions"
-                color="indigo"
-              />
-              <FeatureCard
-                icon={Brain}
-                title="Grading with your selected AI model (runs from this browser)."
-                description="Automatically grades objective questions and provides feedback on written responses"
-                color="purple"
-              />
-              <FeatureCard
-                icon={RefreshCw}
-                title="Generate new practice exams on demand with your model."
-                description="Create new practice exams with similar questions to test your knowledge"
-                color="blue"
-              />
-            </div>
-            <div className="bg-white rounded-xl shadow-xl p-8 border border-indigo-100">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">How It Works Locally</h2>
-              <div className="space-y-6">
-                <FeatureStep
-                  number="1"
-                  title="Upload Your Exam"
-                  description="Upload a photo or paste text. OCR runs in your browser."
-                />
-                <FeatureStep
-                  number="2"
-                  title="LLM Processing & Conversion"
-                  description="Your selected AI model structures the exam into JSON."
-                />
-                <FeatureStep
-                  number="3"
-                  title="Complete Your Exam"
-                  description="Answer questions in an interactive interface."
-                />
-                <FeatureStep
-                  number="4"
-                  title="Grading"
-                  description="Objective questions graded locally; short answers graded by your AI model."
-                />
-                <FeatureStep
-                  number="5"
-                  title="Generate Practice Exams"
-                  description="Create new exams with your model, all in-browser."
-                />
-              </div>
-            </div>
+            {/* ... */}
           </div>
         ) : (
           <ExamView
@@ -2826,6 +2926,238 @@ function AITutorChat({ apiKey, model, examJSON }) {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function AccessibleMenu({ label, options, onSelect, disabled }) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef();
+  const menuRef = useRef();
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    } else {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  return (
+    <div className="relative inline-block">
+      <button
+        ref={buttonRef}
+        className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls="practice-type-menu"
+        disabled={disabled}
+        onClick={() => setOpen(o => !o)}
+        onKeyDown={e => {
+          if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen(true);
+            setTimeout(() => {
+              if (menuRef.current) {
+                const first = menuRef.current.querySelector("button");
+                if (first) first.focus();
+              }
+            }, 0);
+          }
+        }}
+      >
+        {label}
+      </button>
+      {open && (
+        <div
+          id="practice-type-menu"
+          ref={menuRef}
+          className="absolute z-10 bg-white border border-gray-200 rounded shadow-lg mt-2 min-w-[180px]"
+          role="menu"
+        >
+          {options.map((opt, idx) => (
+            <button
+              key={opt.value}
+              className="block w-full text-left px-4 py-2 hover:bg-indigo-50 focus:bg-indigo-100"
+              role="menuitem"
+              tabIndex={0}
+              onClick={() => {
+                onSelect(opt.value);
+                setOpen(false);
+              }}
+              onKeyDown={e => {
+                if (e.key === "Escape") setOpen(false);
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  const next = e.target.nextSibling;
+                  if (next) next.focus();
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  const prev = e.target.previousSibling;
+                  if (prev) prev.focus();
+                  else buttonRef.current.focus();
+                }
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+// --- Practice Question View ---
+function PracticeQuestionView({
+  questions,
+  currentIndex,
+  answer,
+  setAnswer,
+  feedback,
+  setFeedback,
+  onNext,
+  onPrev,
+  onCheck,
+  onSimilar,
+  onDifferent,
+  onRequestType,
+  isProcessing,
+  practiceHistory = []
+}) {
+  const q = questions[currentIndex];
+  // Find history for this question (by id or text)
+  const thisHistory = practiceHistory.filter(
+    h =>
+      (q && h.question && (h.question.id === q.id || h.question.text === q.text))
+  );
+  return (
+    <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-xl p-8 border border-indigo-100">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-indigo-700">Practice Mode</h2>
+        <div className="text-gray-500 text-sm">
+          Question {currentIndex + 1} of {questions.length}
+        </div>
+      </div>
+      {q ? (
+        <>
+          <div className="mb-6">
+            <div className="font-medium text-gray-800 mb-2">{q.text}</div>
+            {q.options && q.options.length > 0 && (
+              <div className="space-y-2">
+                {q.options.map((opt, i) => (
+                  <label key={i} className="flex items-center space-x-2">
+                    <input
+                      type={q.type === "checkbox" ? "checkbox" : "radio"}
+                      name="practice"
+                      value={opt}
+                      checked={
+                        q.type === "checkbox"
+                          ? (answer && answer[opt]) || false
+                          : answer === opt
+                      }
+                      onChange={e => {
+                        if (q.type === "checkbox") {
+                          setAnswer(prev => ({
+                            ...(typeof prev === "object" && prev ? prev : {}),
+                            [opt]: !prev?.[opt]
+                          }));
+                        } else {
+                          setAnswer(opt);
+                        }
+                      }}
+                      disabled={!!feedback}
+                    />
+                    <span>{opt}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            {(q.type === "shortAnswer" || q.type === "text" || (!q.options || q.options.length === 0)) && (
+              <textarea
+                className="w-full border border-gray-300 rounded-lg p-3 mt-2"
+                rows={4}
+                placeholder="Type your answer here..."
+                value={typeof answer === "string" ? answer : ""}
+                onChange={e => setAnswer(e.target.value)}
+                disabled={!!feedback}
+              />
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {/* ... */}
+          </div>
+          {isProcessing && (
+            <div className="text-indigo-600 font-medium mb-2">Processing…</div>
+          )}
+          {feedback && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mt-4">
+              {typeof feedback === "string" ? (
+                <div>{feedback}</div>
+              ) : (
+                <div>
+                  <div className="mb-2 font-medium text-indigo-700">Breakdown:</div>
+                  <ul className="mb-2">
+                    {feedback.breakdown?.map((pt, i) => (
+                      <li key={i} className={pt.achieved ? "text-green-700" : "text-red-700"}>
+                        {pt.achieved ? "✔️" : "❌"} {pt.point}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mb-2">
+                    <span className="font-bold">Score:</span> {feedback.score}
+                  </div>
+                  <div>
+                    <span className="font-bold">Feedback:</span> {feedback.feedback}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {thisHistory.length > 0 && (
+            <div className="mt-6">
+              <div className="font-semibold text-gray-700 mb-2">Your Previous Attempts:</div>
+              <ul className="space-y-2">
+                {thisHistory.slice(-3).reverse().map((h, idx) => (
+                  <li key={idx} className="bg-gray-50 border border-gray-200 rounded p-2 text-sm">
+                    <div>
+                      <span className="font-bold">Your Answer:</span>{" "}
+                      {typeof h.answer === "object"
+                        ? Object.entries(h.answer)
+                            .filter(([, v]) => v)
+                            .map(([k]) => k)
+                            .join(", ")
+                        : h.answer}
+                    </div>
+                    <div>
+                      <span className="font-bold">Feedback:</span>{" "}
+                      {typeof h.feedback === "string"
+                        ? h.feedback
+                        : h.feedback?.feedback}
+                    </div>
+                    <div className="text-gray-400 text-xs">
+                      {new Date(h.timestamp).toLocaleString()}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      ) : (
+        <div>No questions available.</div>
       )}
     </div>
   );
