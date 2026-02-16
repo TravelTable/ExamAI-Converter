@@ -1,10 +1,10 @@
 import React from "react";
-import ExamAIConverterContainer from "./ExamAIConverterContainer";
+import ExamAIContainer from "./features/exam/ExamAIContainer";
 
 function App() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <ExamAIConverterContainer />
+      <ExamAIContainer />
     </div>
   );
 }
